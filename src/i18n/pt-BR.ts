@@ -54,6 +54,8 @@ export const ptBR = {
     visionActive: 'Visão Mística ativa',
     noPowers: 'Selecione uma peça para ver o poder dela.',
     skip: 'Pular animação',
+    options: 'Opções',
+    powerInfo: 'Mostrar descrição do poder',
     newGameConfirm: 'Iniciar uma nova partida? A partida salva será descartada.',
     selected: '{piece} em {square} selecionado — {n} lances legais',
     choosingTarget: '{piece} em {square}: escolha 1 de {n} destinos',

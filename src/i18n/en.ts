@@ -56,6 +56,8 @@ export const en: typeof ptBR = {
     visionActive: 'Mystic Vision active',
     noPowers: 'Select a piece to see its power.',
     skip: 'Skip animation',
+    options: 'Options',
+    powerInfo: 'Show power description',
     newGameConfirm: 'Start a new game? The saved game will be discarded.',
     selected: '{piece} on {square} selected — {n} legal moves',
     choosingTarget: '{piece} on {square}: choose 1 of {n} destinations',

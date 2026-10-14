@@ -55,3 +55,10 @@ export async function startGame(page: Page) {
   await page.locator('.hud').waitFor();
   await page.getByText('Sua vez').waitFor();
 }
+
+/** Clica numa ação do HUD; no celular, abre antes o menu "Opções". */
+export async function hudAction(page: Page, text: string) {
+  const more = page.locator('.hud-more');
+  if (await more.isVisible()) await more.click();
+  await page.locator('.hud-actions .btn', { hasText: text }).click();
+}

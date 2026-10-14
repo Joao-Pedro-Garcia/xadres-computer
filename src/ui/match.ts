@@ -52,6 +52,8 @@ export class Match {
   private aiThinking = false;
   private disposed = false;
   private locked = false;
+  /** Descrição do poder aberta (no celular ela fica recolhida por padrão). */
+  private powerInfoOpen = false;
   /** Inversão temporária pelo botão do HUD (somada à configuração salva). */
   private flipped = false;
   private turnStart: GameState;
@@ -131,9 +133,17 @@ export class Match {
     );
     const practice = !!this.host.practice;
     if (practice) undo.classList.add('hidden');
-    const actions = h(
+    // No celular, as opções ficam recolhidas num único botão para liberar o tabuleiro.
+    const more = h('button', { class: 'btn ghost hud-more', 'aria-expanded': 'false', onclick: () => {
+      const open = actions.classList.toggle('open');
+      more.setAttribute('aria-expanded', String(open));
+    } }, '⋯ ', t('game.options'));
+    const actions: HTMLElement = h(
       'div',
-      { class: 'hud-actions' },
+      { class: 'hud-actions', onclick: (e: Event) => {
+        if ((e.target as HTMLElement).closest('.btn:not(.hud-more)')) actions.classList.remove('open');
+      } },
+      more,
       practice ? '' : h('button', { class: 'btn ghost', onclick: () => void this.leave() }, '☰ ', t('game.menu')),
       undo,
       h('button', { class: 'btn ghost', onclick: () => this.host.view.resetCamera() }, '⟲ ', t('game.resetCamera')),
@@ -281,6 +291,11 @@ export class Match {
     const piece = chessOf(st).get(sel.square)!;
     const energy = st.energy[this.g.playerColor];
     const canAct = !this.busy && sideToMove(st) === this.g.playerColor;
+    const info = h('button', { class: 'power-info', 'aria-label': t('game.powerInfo'), 'aria-expanded': String(this.powerInfoOpen), onclick: () => {
+      this.powerInfoOpen = !this.powerInfoOpen;
+      this.renderPowerPanel();
+    } }, 'ⓘ');
+    panel.classList.toggle('expanded', this.powerInfoOpen);
     const btn = h(
       'button',
       {
@@ -297,6 +312,7 @@ export class Match {
         h('span', { class: 'power-glyph' }, GLYPH[piece.type]),
         h('div', {}, h('div', { class: 'power-name' }, t(`powers.${a.power}.name`)), h('div', { class: 'power-kind' }, spec.endsTurn ? t('powers.movement') : t('powers.support'))),
         h('div', { class: `power-cost ${energy < a.cost ? 'short' : ''}` }, `⚡ ${a.cost}`),
+        info,
       ),
       h('p', { class: 'power-desc' }, t(`powers.${a.power}.desc`, { range: spec.range })),
       !a.available && a.reason ? h('div', { class: 'power-reason' }, t(`errors.${a.reason}`)) : '',

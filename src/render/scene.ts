@@ -469,7 +469,7 @@ export class BoardView {
   private fitDistance(): number {
     const vFov = THREE.MathUtils.degToRad(this.camera.fov);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect);
-    const byWidth = 5.4 / Math.tan(hFov / 2);
+    const byWidth = 5.0 / Math.tan(hFov / 2);
     return Math.max(12.5, byWidth);
   }
 
@@ -892,24 +892,67 @@ export class BoardView {
       }
     }
 
-    // Remoção estilizada da peça capturada.
-    if (victim) {
-      const mat = victim.userData.material;
-      mat.transparent = true;
-      mat.emissive.setHex(c1);
-      const v0 = victim.position.clone();
-      await this.tweens.run(360, (t) => {
-        mat.emissiveIntensity = 1.2 * (1 - t) + 0.3;
-        mat.opacity = 1 - t;
-        victim.scale.setScalar(1 - 0.7 * t);
-        victim.position.set(v0.x + dir.x * 0.3 * t, v0.y + 0.4 * t, v0.z + dir.z * 0.3 * t);
-        victim.rotation.y += 0.15;
-      });
-      victim.visible = false;
-    }
+    // Saída épica da peça capturada.
+    if (victim) await this.epicExit(victim, dir, c1);
     await this.arc(obj, obj.position.clone(), to, 0.15, 220);
     obj.userData.material.emissiveIntensity = 0;
     await this.unfocus();
+  }
+
+  /**
+   * Saída épica: pausa de impacto, a peça é arremessada girando, explode em
+   * estilhaços que quicam no tabuleiro e sobe uma coluna de luz com faíscas.
+   * Com "reduzir movimento", vira uma dissolução suave.
+   */
+  private async epicExit(victim: PieceObject, dir: THREE.Vector3, color: number) {
+    const mat = victim.userData.material;
+    const v0 = victim.position.clone();
+    const teamGlow = victim.userData.color === 'w' ? 0xffe2a0 : 0x9a7bff;
+    mat.emissive.setHex(0xffffff);
+    if (this.opts.reduceMotion) {
+      mat.transparent = true;
+      await this.tweens.run(450, (t) => {
+        mat.emissiveIntensity = 0.8 * (1 - t);
+        mat.opacity = 1 - t;
+      });
+      this.fx.burst(v0.clone().setY(0.4), { count: 20, color: teamGlow, speed: 0.8, life: 0.8, size: 0.1, spread: 'up', gravity: 0.5 });
+      victim.visible = false;
+      return;
+    }
+    // 1. Pausa de impacto: a peça brilha em branco, como congelada no golpe.
+    mat.emissiveIntensity = 2.2;
+    if (this.opts.cameraMotion) this.shake = Math.max(this.shake, 0.18);
+    await this.tweens.wait(110);
+    // 2. Arremesso: voa para trás girando, deixando rastro.
+    mat.emissive.setHex(color);
+    this.fx.trail(victim, color, 0.45);
+    const peak = v0.clone().addScaledVector(dir, 1.1).setY(1.5);
+    const tilt = (Math.random() < 0.5 ? -1 : 1) * 1.6;
+    await this.tweens.run(
+      430,
+      (t) => {
+        victim.position.lerpVectors(v0, peak, t);
+        victim.position.y = v0.y + Math.sin(t * Math.PI * 0.5) * 1.5;
+        victim.rotation.z = tilt * t;
+        victim.rotation.y += 0.35;
+        victim.scale.setScalar(1 - 0.15 * t);
+        mat.emissiveIntensity = 1.2 + t;
+      },
+      ease.out,
+    );
+    // 3. Explosão: estilhaços com o material da peça, clarão e onda de choque.
+    const at = victim.position.clone();
+    this.fx.shatter(at, mat, color, dir, 30);
+    this.fx.burst(at, { count: 60, color, speed: 3.6, life: 0.9, size: 0.13 });
+    this.fx.burst(at, { count: 30, color: 0xffffff, speed: 2, life: 0.5, size: 0.08 });
+    this.fx.flash(at, color, 10);
+    this.fx.shockwave(new THREE.Vector3(at.x, 0, at.z), color, 2.4, 0.7);
+    victim.visible = false;
+    // 4. A essência sobe: coluna de luz e faíscas na cor do exército.
+    this.fx.beam(new THREE.Vector3(at.x, 0, at.z), teamGlow, 1.1, 6);
+    this.fx.burst(new THREE.Vector3(at.x, 0.2, at.z), { count: 40, color: teamGlow, speed: 1.4, life: 1.6, size: 0.09, spread: 'up', gravity: 0.6, drag: 0.6 });
+    this.fx.runes(new THREE.Vector3(at.x, 0, at.z), teamGlow, 1.2, 0.7);
+    await this.tweens.wait(260);
   }
 
   private async animatePowerMove(ev: Extract<GameEvent, { type: 'powerMove' }>) {

@@ -115,7 +115,7 @@ export class Tutorial {
         'div',
         { class: 'tut-top' },
         h('span', { class: 'muted small' }, `${t('tutorial.lessonOf', { n: i + 1, total })} · ${t('tutorial.topic', { n: l.topic })}`),
-        h('button', { class: 'btn ghost small', onclick: () => this.exit(), 'aria-label': t('tutorial.exit') }, '✕ ', t('tutorial.exit')),
+        h('button', { class: 'btn ghost small', onclick: () => this.exit(), 'aria-label': t('tutorial.exit') }, '✕ ', h('span', { class: 'lbl' }, t('tutorial.exit'))),
       ),
       h('div', { class: 'dots', 'aria-hidden': 'true' }, LESSONS.map((x, k) => h('span', { class: `${k === i ? 'on' : ''} ${this.completed.has(x.id) ? 'ok' : ''}` }))),
       h('h3', {}, text('title')),
@@ -140,8 +140,8 @@ export class Tutorial {
       h(
         'div',
         { class: 'modal-actions tut-nav' },
-        h('button', { class: 'btn ghost', disabled: i === 0, onclick: () => this.go(i - 1) }, '‹ ', t('tutorial.prev')),
-        l.kind === 'exercise' ? h('button', { class: 'btn ghost', onclick: () => this.startLesson() }, '↺ ', t('tutorial.restart')) : '',
+        h('button', { class: 'btn ghost', disabled: i === 0, onclick: () => this.go(i - 1), 'aria-label': t('tutorial.prev') }, '‹ ', h('span', { class: 'lbl' }, t('tutorial.prev'))),
+        l.kind === 'exercise' ? h('button', { class: 'btn ghost', onclick: () => this.startLesson(), 'aria-label': t('tutorial.restart') }, '↺ ', h('span', { class: 'lbl' }, t('tutorial.restart'))) : '',
         last
           ? h('button', { class: 'btn primary', onclick: () => this.exit() }, t('tutorial.finish'))
           : h('button', { class: `btn ${l.kind !== 'exercise' || done ? 'primary' : 'ghost'}`, onclick: () => this.go(i + 1) }, t('tutorial.next'), ' ›'),

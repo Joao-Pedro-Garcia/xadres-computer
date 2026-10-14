@@ -367,3 +367,52 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
 
 .menu-footer { gap: 10px; align-items: center; flex-wrap: wrap; }
 .music-btn.off { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* ---------- Celular: HUD compacto para liberar o tabuleiro ---------- */
+.hud-more { display: none; }
+.power-info { display: none; }
+@media (max-width: 760px) {
+  .player-card { padding: 5px 9px; border-radius: 11px; }
+  .player-name { font-size: 12px; gap: 6px; }
+  .side-dot { width: 9px; height: 9px; }
+  .energy { margin-top: 3px; gap: 6px; }
+  .energy-bar { height: 5px; }
+  .energy-value { font-size: 12px; min-width: 40px; }
+  .captured { font-size: 12px; min-height: 0; margin-top: 1px; }
+  .captured:empty { display: none; }
+  .hud-status { top: calc(max(6px, env(safe-area-inset-top)) + 64px); left: 6px; transform: none; max-width: calc(100vw - 130px); font-size: 12px; padding: 4px 10px; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .hud-status .spinner { display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .sidebar { top: calc(max(6px, env(safe-area-inset-top)) + 64px); width: auto; max-width: 150px; }
+  .sidebar-toggle { padding: 6px 10px; font-size: 12px; }
+
+  /* Opções recolhidas num botão. */
+  .hud-actions { left: 6px; right: auto; bottom: max(8px, env(safe-area-inset-bottom)); flex-direction: column-reverse; align-items: flex-start; gap: 4px; }
+  .hud-actions > .btn:not(.hud-more) { display: none; }
+  .hud-actions.open > .btn:not(.hud-more) { display: inline-flex; }
+  .hud-actions.open { background: var(--panel-strong); border: 1px solid var(--border); border-radius: 12px; padding: 6px; box-shadow: var(--shadow); }
+  .hud-more { display: inline-flex; }
+  .hud-actions .btn { min-height: 40px; padding: 6px 10px; font-size: 13px; }
+
+  /* Painel de poder compacto: descrição só quando pedida. */
+  .power-panel { left: auto; right: 6px; width: min(260px, calc(100vw - 120px)); bottom: max(8px, env(safe-area-inset-bottom)); padding: 8px 10px; }
+  .power-head { gap: 6px; }
+  .power-glyph { font-size: 20px; width: 22px; }
+  .power-name { font-size: 14px; }
+  .power-kind { font-size: 10px; }
+  .power-cost { font-size: 13px; white-space: nowrap; }
+  .power-info { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: transparent; color: var(--blue); cursor: pointer; flex: none; }
+  .power-panel:not(.expanded) .power-desc { display: none; }
+  .power-reason, .power-hint { font-size: 11px; margin: 4px 0; }
+  .power-panel .btn.primary { min-height: 38px; padding: 6px 10px; font-size: 13px; margin-top: 4px; }
+
+  /* Tutorial: tira compacta no topo. */
+  .tutorial-card.exercise { top: calc(max(6px, env(safe-area-inset-top)) + 64px); padding: 8px 10px; }
+  .tutorial-card .tut-top .muted { font-size: 11px; }
+  .tutorial-card.exercise h3 { font-size: 15px; margin: 2px 0 4px; }
+  .tutorial-card .tut-task { padding: 6px 9px; gap: 2px; font-size: 13px; }
+  .tutorial-card .tut-nav { margin-top: 6px; gap: 6px; flex-wrap: nowrap; }
+  .tutorial-card .btn { min-height: 36px; padding: 4px 10px; font-size: 13px; }
+  .tutorial-card.exercise .lbl { display: none; }
+  .hud.practice .hud-status { display: none; }
+  .skip-btn { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 56px); }
+}

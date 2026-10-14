@@ -26,6 +26,14 @@ interface Burst {
   drag: number;
 }
 
+interface Shard {
+  mesh: THREE.Mesh;
+  vel: THREE.Vector3;
+  spin: THREE.Vector3;
+  life: number;
+  age: number;
+}
+
 interface Transient {
   obj: THREE.Object3D;
   life: number;
@@ -48,6 +56,8 @@ export interface BurstOptions {
 export class Fx {
   private bursts: Burst[] = [];
   private transients: Transient[] = [];
+  private shards: Shard[] = [];
+  private static shardGeos: THREE.BufferGeometry[] = [];
   /** Multiplicador global de partículas (0 = desligado). */
   density = 1;
   /** Falso quando o jogador pede redução de movimento: luzes piscantes e feixes ficam suaves. */
@@ -105,6 +115,33 @@ export class Fx {
     points.frustumCulled = false;
     this.scene.add(points);
     this.bursts.push({ points, vel, life: o.life, age: 0, gravity: o.gravity ?? -2, drag: o.drag ?? 1.5 });
+  }
+
+  /**
+   * Estilhaça uma peça: fragmentos com o material dela voam, giram, quicam no
+   * tabuleiro e se desfazem em brilho.
+   */
+  shatter(pos: THREE.Vector3, material: THREE.Material, glow: number, dir: THREE.Vector3, count = 26) {
+    const n = Math.max(6, Math.round(count * Math.max(0.35, this.density)));
+    if (!Fx.shardGeos.length) {
+      Fx.shardGeos = [new THREE.TetrahedronGeometry(0.09), new THREE.OctahedronGeometry(0.07), new THREE.BoxGeometry(0.1, 0.06, 0.08), new THREE.TetrahedronGeometry(0.13)];
+    }
+    for (let i = 0; i < n; i++) {
+      const mat = (material as THREE.MeshStandardMaterial).clone();
+      mat.transparent = true;
+      mat.emissive = new THREE.Color(glow);
+      mat.emissiveIntensity = 1.4;
+      const mesh = new THREE.Mesh(Fx.shardGeos[i % Fx.shardGeos.length], mat);
+      mesh.position.set(pos.x + (Math.random() - 0.5) * 0.3, pos.y + Math.random() * 0.7, pos.z + (Math.random() - 0.5) * 0.3);
+      mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+      const s = 0.6 + Math.random() * 0.9;
+      mesh.scale.setScalar(s);
+      const a = Math.random() * Math.PI * 2;
+      const out = 1.2 + Math.random() * 2.4;
+      const vel = new THREE.Vector3(Math.cos(a) * out + dir.x * 2.2, 2 + Math.random() * 3.2, Math.sin(a) * out + dir.z * 2.2);
+      this.scene.add(mesh);
+      this.shards.push({ mesh, vel, spin: new THREE.Vector3(Math.random() * 12 - 6, Math.random() * 12 - 6, Math.random() * 12 - 6), life: 1.3 + Math.random() * 0.6, age: 0 });
+    }
   }
 
   shockwave(pos: THREE.Vector3, color: number, radius: number, life = 0.6) {
@@ -212,6 +249,33 @@ export class Fx {
     }
     this.bursts = this.bursts.filter((x) => x.age < x.life);
 
+    for (const sh of this.shards) {
+      sh.age += dt;
+      sh.vel.y -= 9.8 * dt;
+      sh.mesh.position.addScaledVector(sh.vel, dt);
+      if (sh.mesh.position.y < 0.04) {
+        // Quica no tabuleiro perdendo energia.
+        sh.mesh.position.y = 0.04;
+        sh.vel.y = Math.abs(sh.vel.y) * 0.35;
+        sh.vel.x *= 0.6;
+        sh.vel.z *= 0.6;
+        sh.spin.multiplyScalar(0.6);
+      }
+      sh.mesh.rotation.x += sh.spin.x * dt;
+      sh.mesh.rotation.y += sh.spin.y * dt;
+      sh.mesh.rotation.z += sh.spin.z * dt;
+      const k = sh.age / sh.life;
+      const mat = sh.mesh.material as THREE.MeshStandardMaterial;
+      mat.emissiveIntensity = Math.max(0, 1.4 - k * 2);
+      mat.opacity = k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+      if (k > 0.6) sh.mesh.scale.multiplyScalar(1 - dt * 1.5);
+    }
+    for (const sh of this.shards.filter((x) => x.age >= x.life)) {
+      this.scene.remove(sh.mesh);
+      (sh.mesh.material as THREE.Material).dispose();
+    }
+    this.shards = this.shards.filter((x) => x.age < x.life);
+
     for (const tr of this.transients) {
       tr.age += dt;
       tr.update(Math.min(1, tr.age / tr.life), tr.obj);
@@ -224,8 +288,13 @@ export class Fx {
     for (const b of this.bursts) this.dispose(b.points);
     for (const t of this.transients) this.dispose(t.obj);
     this.active = 0;
+    for (const sh of this.shards) {
+      this.scene.remove(sh.mesh);
+      (sh.mesh.material as THREE.Material).dispose();
+    }
     this.bursts = [];
     this.transients = [];
+    this.shards = [];
   }
 
   private dispose(obj: THREE.Object3D) {

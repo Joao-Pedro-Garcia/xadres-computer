@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { applyAction, createGame } from '../src/core/game';
-import { boot, clickSquare, squarePoint, startGame, tapSquare } from './helpers';
+import { boot, clickSquare, hudAction, squarePoint, startGame, tapSquare } from './helpers';
 
 test('navegação entre menus', async ({ page }) => {
   await boot(page);
@@ -52,7 +52,7 @@ test('trocar idioma não reinicia a partida', async ({ page }) => {
   await clickSquare(page, 'd2');
   await clickSquare(page, 'd4');
   await expect(page.locator('.hud-status')).toContainText('Sua vez', { timeout: 60_000 });
-  await page.locator('.hud-actions .btn', { hasText: 'Configurações' }).click();
+  await hudAction(page, 'Configurações');
   await page.locator('.seg-btn', { hasText: 'English' }).click();
   await page.locator('.back').click();
   await expect(page.locator('.hud-status')).toContainText('Your turn');
@@ -73,7 +73,7 @@ test('redimensionamento mantém o tabuleiro visível', async ({ page }) => {
   ]) {
     await page.setViewportSize(size);
     await page.waitForTimeout(400);
-    await page.locator('.hud-actions .btn', { hasText: 'Restaurar câmera' }).click();
+    await hudAction(page, 'Restaurar câmera');
     await page.waitForTimeout(400);
     const [cw, ch] = await page.evaluate(() => (window as unknown as { __arcane: { canvasSize: () => number[] } }).__arcane.canvasSize());
     expect(cw).toBe(size.width);
@@ -102,7 +102,7 @@ test('controles de câmera: girar e restaurar', async ({ page }) => {
   expect(Math.hypot(rotated[0] - before[0], rotated[2] - before[2])).toBeGreaterThan(0.5);
   await page.mouse.wheel(0, 600);
   await page.waitForTimeout(400);
-  await page.locator('.hud-actions .btn', { hasText: 'Restaurar câmera' }).click();
+  await hudAction(page, 'Restaurar câmera');
   await page.waitForTimeout(400);
   const reset = await cam();
   reset.forEach((v, i) => expect(Math.abs(v - before[i])).toBeLessThan(0.05));
