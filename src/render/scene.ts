@@ -250,6 +250,7 @@ export class BoardView {
 
   private buildBoard() {
     const grain = this.grainTexture();
+    grain.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
     this.lightMat.map = grain;
     this.darkMat.map = grain;
     const sqGeo = new THREE.BoxGeometry(1, 0.16, 1);
@@ -402,7 +403,7 @@ export class BoardView {
 
   /** Panorama pintado do tema (em cache por tema e resolução). */
   private getPanorama(theme: ThemeDef): THREE.CanvasTexture {
-    const H = this.opts.quality === 'low' ? 512 : this.opts.quality === 'medium' ? 768 : 1024;
+    const H = this.opts.quality === 'low' ? 768 : 1024;
     const key = `${theme.id}:${H}`;
     let tex = BoardView.panoramaCache.get(key);
     if (!tex) {
@@ -413,8 +414,8 @@ export class BoardView {
       tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.wrapS = THREE.RepeatWrapping;
-      tex.generateMipmaps = false;
-      tex.minFilter = THREE.LinearFilter;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
       BoardView.panoramaCache.set(key, tex);
     }
     return tex;
@@ -424,15 +425,19 @@ export class BoardView {
   private updatePanorama() {
     const tex = this.panorama;
     if (!tex) return;
-    const rx = Math.min(1, this.camera.aspect / 4);
+    // Em telas estreitas (celular em pé), mostra uma faixa maior do panorama mantendo a
+    // proporção: o castelo fica menor e nítido em vez de gigante e borrado. O que sobra
+    // acima/abaixo usa a cor das bordas do céu e do chão.
+    const rx = Math.min(1, Math.max(this.camera.aspect / 4, 0.3));
+    const ry = (rx * 4) / this.camera.aspect;
     const azimuth = Math.atan2(this.camera.position.x - this.controls.target.x, this.camera.position.z - this.controls.target.z);
     // Com a câmera inclinada para baixo (jogo), o panorama desce para o castelo
     // continuar visível acima do tabuleiro; com a câmera baixa (menu), fica no lugar.
     const d = this.camera.position.clone().sub(this.controls.target);
     const polar = Math.acos(THREE.MathUtils.clamp(d.y / d.length(), -1, 1));
     const dy = this.mode === 'menu' ? 0 : THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(polar, 0.55, 1.15, -0.24, 0), -0.24, 0);
-    tex.repeat.set(rx, 1);
-    tex.offset.set(0.5 - azimuth / (Math.PI * 2) - rx / 2, dy);
+    tex.repeat.set(rx, ry);
+    tex.offset.set(0.5 - azimuth / (Math.PI * 2) - rx / 2, (1 - ry) / 2 + dy * ry);
   }
 
   setSkin(skin: PieceSkinDef, fen?: string) {
@@ -479,7 +484,8 @@ export class BoardView {
   }
 
   private applyPixelRatio() {
-    const pr = this.opts.quality === 'low' ? 1 : this.opts.quality === 'medium' ? 1.5 : 2;
+    // Celulares têm telas muito densas: resolução 1 deixava tudo borrado.
+    const pr = this.opts.quality === 'low' ? 1.5 : this.opts.quality === 'medium' ? 2 : 2.5;
     this.renderer.setPixelRatio(Math.max(0.75, Math.min(window.devicePixelRatio || 1, pr) * this.autoScale));
   }
 

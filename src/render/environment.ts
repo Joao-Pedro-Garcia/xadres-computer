@@ -16,8 +16,8 @@ export class Environment {
 
     // Pátio circular sob o tabuleiro, com borda rúnica brilhante.
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(10.8, 72),
-      new THREE.MeshStandardMaterial({ color: sc.ground, roughness: 0.95, metalness: 0.05 }),
+      new THREE.CircleGeometry(10.8, 96),
+      new THREE.MeshStandardMaterial({ map: flagstones(sc.ground, sc.propGlow), roughness: 0.85, metalness: 0.05 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -1.0;
@@ -86,12 +86,23 @@ export class Environment {
     const g = new THREE.Group();
     switch (sc.props) {
       case 'pines': {
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.8, 6), new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.9 }));
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.8, 10), new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.9 }));
         trunk.position.y = 0.4;
         g.add(trunk);
-        for (let k = 0; k < 3; k++) {
-          const c = new THREE.Mesh(new THREE.ConeGeometry(0.9 - k * 0.22, 1.2, 8), solid);
-          c.position.y = 1.1 + k * 0.6;
+        // Pinheiro em camadas com pontas caídas e leve variação de tom.
+        for (let k = 0; k < 4; k++) {
+          const layer = new THREE.ConeGeometry(0.95 - k * 0.2, 1.0, 18, 1, true);
+          const pos = layer.attributes.position;
+          for (let v = 0; v < pos.count; v++) {
+            if (pos.getY(v) < -0.4) pos.setY(v, pos.getY(v) - 0.12 * Math.abs(Math.sin(v * 1.7)));
+          }
+          layer.computeVertexNormals();
+          const tone = solid.clone();
+          tone.color.offsetHSL(0, 0, k * 0.035);
+          tone.side = THREE.DoubleSide;
+          const c = new THREE.Mesh(layer, tone);
+          c.position.y = 1.0 + k * 0.5;
+          c.rotation.y = k * 0.7;
           g.add(c);
         }
         if (i % 3 === 0) {
@@ -105,7 +116,7 @@ export class Environment {
       }
       case 'crystals': {
         for (let k = 0; k < 3; k++) {
-          const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), glow());
+          const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 1), glow());
           c.scale.set(0.7, 2.6 - k * 0.5, 0.7);
           c.position.set((k - 1) * 0.4, 0.9 + k * 0.1, (k % 2) * 0.3);
           c.rotation.z = (k - 1) * 0.25;
@@ -130,7 +141,7 @@ export class Environment {
       }
       case 'spires': {
         for (let k = 0; k < 3; k++) {
-          const c = new THREE.Mesh(new THREE.ConeGeometry(0.35 - k * 0.07, 2.4 - k * 0.5, 5), new THREE.MeshStandardMaterial({ color: sc.propColor, metalness: 0.6, roughness: 0.15, emissive: new THREE.Color(sc.propGlow), emissiveIntensity: 0.25 }));
+          const c = new THREE.Mesh(new THREE.ConeGeometry(0.35 - k * 0.07, 2.4 - k * 0.5, 7), new THREE.MeshStandardMaterial({ color: sc.propColor, metalness: 0.6, roughness: 0.15, emissive: new THREE.Color(sc.propGlow), emissiveIntensity: 0.25 }));
           c.position.set((k - 1) * 0.45, (2.4 - k * 0.5) / 2, (k % 2) * 0.3);
           c.rotation.z = (k - 1) * 0.2;
           g.add(c);
@@ -140,7 +151,7 @@ export class Environment {
       case 'iceShards': {
         const ice = new THREE.MeshStandardMaterial({ color: sc.propColor, emissive: new THREE.Color(sc.propGlow), emissiveIntensity: 0.25, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.8 });
         for (let k = 0; k < 4; k++) {
-          const c = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.8 - k * 0.3, 6), ice);
+          const c = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.8 - k * 0.3, 8), ice);
           c.position.set(Math.cos(k * 1.7) * 0.35, (1.8 - k * 0.3) / 2, Math.sin(k * 1.7) * 0.35);
           c.rotation.set(Math.cos(k) * 0.3, 0, Math.sin(k) * 0.3);
           g.add(c);
@@ -148,7 +159,7 @@ export class Environment {
         break;
       }
       case 'lavaRocks': {
-        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7, 0), new THREE.MeshStandardMaterial({ color: sc.propColor, roughness: 0.9, emissive: new THREE.Color(sc.propGlow), emissiveIntensity: 0.35 }));
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7, 1), new THREE.MeshStandardMaterial({ color: sc.propColor, roughness: 0.9, emissive: new THREE.Color(sc.propGlow), emissiveIntensity: 0.35 }));
         rock.position.y = 0.4;
         rock.scale.set(1, 0.8, 1.1);
         const pool = new THREE.Mesh(new THREE.CircleGeometry(0.6, 16), new THREE.MeshBasicMaterial({ color: sc.propGlow, transparent: true, opacity: 0.7 }));
@@ -159,7 +170,7 @@ export class Environment {
         break;
       }
       case 'asteroids': {
-        const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), new THREE.MeshStandardMaterial({ color: sc.propColor, roughness: 0.8, emissive: new THREE.Color(sc.propGlow), emissiveIntensity: 0.15 }));
+        const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 1), new THREE.MeshStandardMaterial({ color: sc.propColor, roughness: 0.8, emissive: new THREE.Color(sc.propGlow), emissiveIntensity: 0.15 }));
         rock.scale.set(1, 0.7, 0.9);
         g.add(rock);
         g.position.copy(at).setY(0.5 + (i % 4) * 0.7);
@@ -170,7 +181,7 @@ export class Environment {
       }
       case 'columns': {
         const h = i % 3 === 0 ? 1.0 : 2.4;
-        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, h, 14), new THREE.MeshStandardMaterial({ color: sc.propColor, roughness: 0.35 }));
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, h, 20), new THREE.MeshStandardMaterial({ color: sc.propColor, roughness: 0.35 }));
         col.position.y = h / 2;
         const cap = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.16, 0.75), col.material);
         cap.position.y = h + 0.08;
@@ -222,4 +233,67 @@ export class Environment {
     this.group.clear();
     this.animated = [];
   }
+}
+
+/** Piso de lajes de pedra em anéis, com juntas, musgo/pó e runas sutis. */
+const flagCache = new Map<string, THREE.CanvasTexture>();
+function flagstones(base: number, glow: number): THREE.CanvasTexture {
+  const key = `${base}:${glow}`;
+  const hit = flagCache.get(key);
+  if (hit) return hit;
+  const N = 1024;
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const g = c.getContext('2d')!;
+  const col = new THREE.Color(base);
+  const shade = (k: number, a = 1) => {
+    const x = col.clone().offsetHSL(0, -0.05, k);
+    return `rgba(${Math.round(x.r * 255)},${Math.round(x.g * 255)},${Math.round(x.b * 255)},${a})`;
+  };
+  g.fillStyle = shade(-0.12);
+  g.fillRect(0, 0, N, N);
+  const cx = N / 2;
+  let seed = 3;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  // Anéis de lajes do centro para fora.
+  for (let ring = 0, r0 = N * 0.06; r0 < N * 0.5; ring++) {
+    const width = N * (0.045 + ring * 0.002);
+    const r1 = r0 + width;
+    const count = Math.max(6, Math.round((2 * Math.PI * (r0 + width / 2)) / (width * 1.4)));
+    for (let i = 0; i < count; i++) {
+      const a0 = (i / count) * Math.PI * 2 + ring * 0.37;
+      const a1 = ((i + 1) / count) * Math.PI * 2 + ring * 0.37;
+      g.beginPath();
+      g.arc(cx, cx, r1 - 3, a0 + 0.012, a1 - 0.012);
+      g.arc(cx, cx, r0 + 3, a1 - 0.012, a0 + 0.012, true);
+      g.closePath();
+      g.fillStyle = shade((rnd() - 0.5) * 0.08);
+      g.fill();
+    }
+    r0 = r1;
+  }
+  // Textura: pontos de desgaste e musgo.
+  for (let i = 0; i < 9000; i++) {
+    g.fillStyle = rnd() < 0.5 ? shade(0.08, 0.15) : shade(-0.2, 0.18);
+    g.fillRect(rnd() * N, rnd() * N, 2 + rnd() * 3, 2 + rnd() * 3);
+  }
+  // Anel rúnico gravado.
+  const gc = new THREE.Color(glow);
+  g.strokeStyle = `rgba(${Math.round(gc.r * 255)},${Math.round(gc.g * 255)},${Math.round(gc.b * 255)},0.35)`;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.arc(cx, cx, N * 0.4, 0, Math.PI * 2);
+  g.stroke();
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a) * N * 0.385, cx + Math.sin(a) * N * 0.385);
+    g.lineTo(cx + Math.cos(a + 0.05) * N * 0.415, cx + Math.sin(a + 0.05) * N * 0.415);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  flagCache.set(key, tex);
+  return tex;
 }
