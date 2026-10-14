@@ -11,11 +11,12 @@ npm install
 npm run dev        # servidor de desenvolvimento (http://localhost:5173)
 npm run build      # checagem de tipos + build de produção em dist/
 npm run preview    # serve o build de produção
-npm test           # testes automatizados (Vitest)
+npm test           # testes automatizados de lógica (Vitest)
+npm run test:e2e   # testes de interface no Chromium (Playwright; compila e sobe o preview sozinho)
 npm run simulate   # partidas IA x IA para balanceamento (gera scripts/sim-report.json)
 ```
 
-Requer Node 20+ e um navegador com WebGL.
+Requer Node 20+ e um navegador com WebGL 2. Para os testes de interface, o Chromium do Playwright precisa estar instalado (`npx playwright install chromium`) ou indicado em `PW_CHROMIUM_PATH`.
 
 ## Tecnologias
 
@@ -33,32 +34,26 @@ Requer Node 20+ e um navegador com WebGL.
 
 ```
 src/
-  core/       Regras puras, sem DOM nem 3D (testáveis em Node)
-    types.ts      Tipos do estado, ações, eventos
-    balance.ts    TODOS os números de balanceamento (custos, alcances, durações, energia)
-    game.ts       Motor transacional: createGame / applyAction / poderes / energia / fim de jogo
-    squares.ts    Utilidades de casas
-  ai/
-    search.ts     Negamax alfa-beta + quiescência + aprofundamento iterativo; avalia poderes e energia
-    eval.ts       Avaliação material/posicional e valor da energia
-    worker.ts     Execução em Web Worker; client.ts faz a ponte (com fallback)
-  meta/
-    profile.ts    XP, níveis, moedas, desafios, conquistas, loja (idempotente por partida)
-    catalog.ts    Itens cosméticos, temas, peles de peças, rastros, efeitos de captura
-    session.ts    Partida salva (validação), histórico, resumo da partida
-    settings.ts   Configurações com saneamento
-    storage.ts    Persistência local
-  render/
-    scene.ts      BoardView: cena, câmera, seleção por toque/clique, destaques, zonas, animações
-    pieces.ts     Modelos 3D procedurais das peças (torno + extrusão)
-    fx.ts         Partículas, ondas de choque, feixes, runas, rastros
-    tween.ts      Animações por tempo (com "pular")
-  ui/
-    app.ts        Menu e telas (jogar, dificuldade, personalização, temas, conquistas, histórico, tutorial, configurações, créditos)
-    match.ts      Controlador da partida + HUD
-    audio.ts      Efeitos sonoros sintetizados (WebAudio)
-  i18n/           pt-BR e inglês
+  core/         Regras puras, sem DOM nem Three.js (testáveis em Node)
+    types.ts      Tipos explícitos: estado, ações, eventos, efeitos, resultados
+    balance.ts    Todos os números de balanceamento (custos, alcances, durações, energia)
+    game.ts       Motor transacional: createGame / applyAction / validação / fim de jogo
+    energy.ts     Sistema de energia (turno, captura, gasto único)
+    zones.ts      Zonas antimagia (Escudo Real e Muralha)
+    board.ts      Utilidades sobre o chess.js (FEN de poderes, segurança do rei)
+    powers/       Um módulo por habilidade: custo, pré-condição, destinos, efeito
+  ai/           Busca negamax + quiescência em Web Worker; usa a mesma applyAction do jogador
+  tutorial/     Lições e exercícios (dados + objetivos verificáveis)
+  meta/         Progressão (XP, moedas, conquistas, loja), catálogo, sessão/histórico, configurações, persistência
+  render/       Three.js: cena, peças procedurais, efeitos, animações (nunca decide legalidade)
+  ui/           Menu, HUD da partida, tutorial, áudio; screens/ (histórico, configurações)
+  i18n/         Dicionários pt-BR e inglês (todos os textos)
+tests/          Vitest: regras, energia, poderes, IA, progressão, persistência, tutorial
+e2e/            Playwright: toque, mouse, idioma, redimensionamento, menus, câmera, persistência, tutorial
+public/         Manifesto, ícones e service worker (instalação e modo offline)
 ```
+
+A estrutura sugerida no documento (engine/rules/powers/energy/…) foi adaptada: as pastas acima mantêm a mesma separação de responsabilidades com menos arquivos.
 
 ### Fluxo transacional das jogadas
 
@@ -123,7 +118,7 @@ A dificuldade vem apenas da capacidade de análise — nunca de energia extra. A
 - Loja apenas com **cosméticos** (temas, peças, rastros, efeitos de captura); valida saldo, nível, conquista e compra duplicada.
 - Os dados são locais: podem ser perdidos ao limpar os dados do navegador e **não** são protegidos contra adulteração.
 
-Conquistas (19): primeira partida, primeira vitória, primeiro xeque-mate, vitórias contra Médio/Difícil/Mestre, primeiro poder, usar os seis poderes, vencer sem poderes, vencer de pretas, **xeque-mate arcano** (mate dado por um poder), **grão-arcanista** (seis poderes numa só vitória), primeira promoção, 3 vitórias seguidas, 10 vitórias, 25 partidas, níveis 5 e 10, colecionador.
+Conquistas (27), cada uma com nome, descrição, condição, barra de progresso, recompensa e indicador textual (✓ desbloqueada / ○ bloqueada): primeira partida, primeira vitória, primeiro xeque-mate, vitórias contra Médio/Difícil/Mestre, primeiro poder, **primeiro uso de cada um dos seis poderes**, usar os seis poderes, vencer sem poderes, vencer de pretas, xeque-mate arcano (mate dado por um poder), grão-arcanista (seis poderes numa só vitória), primeira promoção, 3 vitórias seguidas, **desafio estratégico** (qualquer desafio de partida) e mestre dos desafios (todos), 10 vitórias, 25 partidas, níveis 5 e 10, colecionador. Conclusão única por conquista; recompensas integradas a XP/moedas sem duplicação.
 
 Temas: Clássico Real, Arcano Azul, Reino Dourado, Obsidiana, Gelo Místico, Chamas Arcanas, Cosmos, Mármore Antigo.
 
@@ -137,9 +132,26 @@ O build de produção inclui manifesto e *service worker*: no Chrome do celular,
 - **Câmera**: arrastar (1 dedo / botão esquerdo) gira; pinça / roda faz zoom; 2 dedos / botão direito desloca. Limites de zoom, ângulo e deslocamento impedem perder o tabuleiro. Botão "Restaurar câmera".
 - **Esc**: pula a animação ou cancela a seleção.
 
+## Configurações
+
+Idioma, qualidade (automática/baixa/média/alta — a automática escolhe pelo aparelho e reduz a resolução se o FPS cair), sombras, partículas, coordenadas, animações (completas/pular), velocidade das animações, reduzir movimento, movimentos de câmera, sensibilidade da câmera, controle de toque (1 dedo gira ou 2 dedos giram), inverter perspectiva, permitir desfazer, som, volume geral, volume dos efeitos, alto contraste, texto grande e **restaurar padrões**. Tudo é aplicado na hora, salvo automaticamente e pode ser alterado durante a partida (botão ⚙) sem reiniciá-la.
+
+## Tutorial
+
+12 lições cobrindo os 10 tópicos pedidos, com 10 exercícios práticos no tabuleiro 3D (mover, capturar, roque, mate, energia, ativar poder, custos, suporte + recuperação, animação de captura, vencer com um poder). Avançar, voltar, reiniciar e sair a qualquer momento. É oferecido no primeiro acesso e fica sempre no menu.
+
+## Histórico
+
+Cada partida concluída guarda: data/hora, resultado e motivo, cor, dificuldade, duração, lances, capturas (suas × IA), poderes usados (seus e da IA), recompensas, sequência de lances e posição final (mostrada num mini-tabuleiro). Filtros por resultado e dificuldade; apagar com confirmação. Nenhum dado pessoal é armazenado.
+
+## Salvamento local
+
+`localStorage`, com chaves versionadas (`arcane.*.v1`) e campo `version` em cada estrutura: configurações (v2, migradas da v1), perfil (XP, moedas, itens, conquistas, estatísticas — campos novos são completados), histórico (até 50 partidas) e a partida em andamento (FEN, energia, turno, zonas, visão, contagem de repetição, lances, uso de poderes do turno, pilha de desfazer). Dados inválidos ou corrompidos são descartados com aviso. A partida é salva após cada ação validada, antes da animação. **Não há sincronização entre aparelhos**, e os dados somem se o navegador apagar os dados do site.
+
 ## Testes
 
-`npm test` cobre: regras tradicionais (roque, en passant, promoção, mate, afogamento, repetição), energia (turno, teto, bônus de captura único), cada poder (alcance, ocupação, segurança do rei, zonas, limites por turno, ausência de en passant), IA (somente ações legais em todos os níveis, mate em 1, captura, partidas IA×IA), progressão (recompensa única, desistência, desfazer), loja (saldo, duplicatas, requisitos) e persistência (configurações e saves corrompidos).
+- `npm test` (Vitest, 61 testes): regras tradicionais (lances inválidos, xeque-mate, afogamento, repetição, roque, en passant, promoção, capturas, turnos), energia (+10, +15 uma vez por turno, teto 200, energia insuficiente, falhas não cobram, cobrança única), cada poder (custo, destinos válidos/inválidos, segurança do rei, limites por turno, duração dos efeitos, zonas, mate dado por poder), IA (só ações legais em todos os níveis, mate em 1, captura, zonas respeitadas, partidas IA×IA), progressão (recompensa única por partida, desistência, desfazer, progresso de conquistas), loja, persistência (salvar/carregar com efeitos ativos, dados corrompidos, migração de configurações e perfil), histórico e tutorial (cada exercício tem solução validada pelo motor).
+- `npm run test:e2e` (Playwright, 8 testes no Chromium): navegação entre menus, seleção/movimento por mouse, seleção/movimento por toque, troca de idioma durante a partida, redimensionamento (desktop, celular em pé e deitado), controles de câmera, persistência de XP/conquistas/histórico após recarregar e tutorial.
 
 ## Limitações conhecidas
 

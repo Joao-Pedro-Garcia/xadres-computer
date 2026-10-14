@@ -65,6 +65,8 @@ export function migrateProfile(v: Profile): Profile {
   return {
     ...base,
     ...v,
+    // Itens gratuitos sempre ficam disponíveis.
+    owned: [...new Set([...base.owned, ...(v.owned ?? [])])],
     equipped: { ...base.equipped, ...v.equipped },
     stats: {
       ...base.stats,
@@ -119,9 +121,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'firstGame', icon: '♙', xp: 20, coins: 20, progress: (p) => n(p.stats.games, 1) },
   { id: 'firstWin', icon: '♔', xp: 40, coins: 40, progress: (p) => n(p.stats.wins, 1) },
   { id: 'firstCheckmate', icon: '♚', xp: 50, coins: 50, progress: (p) => n(p.stats.checkmates, 1) },
-  { id: 'winMedium', icon: '◆', xp: 60, coins: 60, progress: (p) => n(p.stats.winsByDifficulty.medium, 1) },
-  { id: 'winHard', icon: '◆◆', xp: 100, coins: 100, progress: (p) => n(p.stats.winsByDifficulty.hard, 1) },
-  { id: 'winMaster', icon: '◆◆◆', xp: 200, coins: 200, progress: (p) => n(p.stats.winsByDifficulty.master, 1) },
+  { id: 'winMedium', icon: '◈', xp: 60, coins: 60, progress: (p) => n(p.stats.winsByDifficulty.medium, 1) },
+  { id: 'winHard', icon: '❖', xp: 100, coins: 100, progress: (p) => n(p.stats.winsByDifficulty.hard, 1) },
+  { id: 'winMaster', icon: '✪', xp: 200, coins: 200, progress: (p) => n(p.stats.winsByDifficulty.master, 1) },
   { id: 'firstPower', icon: '⚡', xp: 15, coins: 15, progress: (p) => n(Object.values(p.stats.powersUsed).filter((x) => (x ?? 0) > 0).length, 1) },
   ...ALL_POWERS.map((pw) => ({ id: `power_${pw}`, icon: '✦', xp: 15, coins: 10, progress: (p: Profile) => n(p.stats.powersUsed[pw] ?? 0, 1) })),
   { id: 'powerAdept', icon: '✶', xp: 80, coins: 80, progress: (p) => n(ALL_POWERS.filter((k) => (p.stats.powersUsed[k] ?? 0) > 0).length, ALL_POWERS.length) },
@@ -136,7 +138,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'tenWins', icon: '♔', xp: 150, coins: 150, progress: (p) => n(p.stats.wins, 10) },
   { id: 'veteran', icon: '⌛', xp: 100, coins: 100, progress: (p) => n(p.stats.games, 25) },
   { id: 'level5', icon: '★', xp: 0, coins: 150, progress: (p) => n(levelInfo(p.xp).level, 5) },
-  { id: 'level10', icon: '★★', xp: 0, coins: 400, progress: (p) => n(levelInfo(p.xp).level, 10) },
+  { id: 'level10', icon: '✯', xp: 0, coins: 400, progress: (p) => n(levelInfo(p.xp).level, 10) },
   { id: 'collector', icon: '◈', xp: 80, coins: 0, progress: (p) => n(p.owned.length, 8) },
 ];
 

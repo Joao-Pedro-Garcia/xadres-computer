@@ -94,7 +94,12 @@ export class App {
     this.view.setMode('menu');
     this.view.start();
     if (new URLSearchParams(location.search).has('debug')) {
-      (window as unknown as Record<string, unknown>).__arcane = { project: (x: number, z: number) => this.view.project(x, z) };
+      // Ganchos usados apenas pelos testes automatizados de interface (?debug).
+      (window as unknown as Record<string, unknown>).__arcane = {
+        project: (x: number, z: number) => this.view.project(x, z),
+        camera: () => this.view.camera.position.toArray(),
+        canvasSize: () => [this.view.renderer.domElement.clientWidth, this.view.renderer.domElement.clientHeight],
+      };
     }
     this.applySettings();
     document.getElementById('loading')?.remove();

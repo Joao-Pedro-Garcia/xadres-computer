@@ -132,7 +132,7 @@ button { font: inherit; color: inherit; }
 .ach-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .ach { display: flex; gap: 12px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(255, 255, 255, 0.02); opacity: 0.7; position: relative; }
 .ach.done { opacity: 1; border-color: rgba(255, 210, 122, 0.4); background: linear-gradient(135deg, rgba(255, 210, 122, 0.1), transparent); }
-.ach-icon { font-size: 26px; color: var(--gold); width: 32px; text-align: center; }
+.ach-icon { font-size: 22px; color: var(--gold); width: 44px; flex: none; text-align: center; letter-spacing: -2px; white-space: nowrap; overflow: hidden; }
 .ach p { margin: 2px 0; color: var(--muted); font-size: 13px; }
 .ach small { color: var(--blue); font-size: 12px; }
 .ach .date { position: absolute; right: 10px; top: 10px; color: var(--muted); }
@@ -279,6 +279,8 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
 .xpbar.wide { width: 100%; height: 8px; margin-bottom: 14px; }
 .ach-body { flex: 1; min-width: 0; }
 .ach-progress { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.ach-progress .xpbar { flex: 1; width: auto; }
+.ach-progress small { white-space: nowrap; }
 .ach-state { font-size: 11px; color: var(--muted); white-space: nowrap; align-self: flex-start; }
 .ach-state.ok { color: var(--gold); }
 .ach .date { position: static; display: block; }
@@ -341,7 +343,7 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
 
 /* ---------- Tutorial ---------- */
 .tutorial-card { pointer-events: auto; position: absolute; z-index: 5; padding: 16px; width: min(420px, calc(100vw - 20px)); }
-.tutorial-card.exercise { left: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 140px); }
+.tutorial-card.exercise { left: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 110px); width: min(400px, calc(100vw - 20px)); max-height: calc(100vh - 230px); overflow-y: auto; }
 .tutorial-card.info, .tutorial-card.menus { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 24px)); }
 .tutorial-card h3 { font-family: var(--display); color: var(--gold); margin: 8px 0 6px; font-size: 20px; }
 .tut-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

@@ -481,10 +481,11 @@ export class BoardView {
     const dir = new THREE.Vector3(0, Math.sin(elev), Math.cos(elev) * (this.orientation === 'w' ? 1 : -1));
     const target = new THREE.Vector3(0, 0, 0);
     const pos = dir.multiplyScalar(d);
+    this.stopCameraInertia();
     if (instant || !this.opts.cameraMotion) {
       this.camera.position.copy(pos);
       this.controls.target.copy(target);
-      this.controls.update();
+      this.stopCameraInertia();
       return;
     }
     const p0 = this.camera.position.clone();
@@ -492,8 +493,16 @@ export class BoardView {
     void this.tweens.run(700, (t) => {
       this.camera.position.lerpVectors(p0, pos, t);
       this.controls.target.lerpVectors(t0, target, t);
-      this.controls.update();
+      this.stopCameraInertia();
     });
+  }
+
+  /** Zera a inércia (amortecimento) restante de giros/zoom anteriores. */
+  private stopCameraInertia() {
+    const damping = this.controls.enableDamping;
+    this.controls.enableDamping = false;
+    this.controls.update();
+    this.controls.enableDamping = damping;
   }
 
   private clampTarget() {
@@ -969,6 +978,13 @@ export class BoardView {
 
   /* ----------------------------- Loop ----------------------------- */
 
+  /** Espaço (px) ocupado por um painel à esquerda; o tabuleiro é recentrado na área livre. */
+  private leftInset = 0;
+  setLeftInset(px: number) {
+    this.leftInset = px;
+    this.resize();
+  }
+
   private resize() {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
@@ -976,6 +992,10 @@ export class BoardView {
     this.camera.aspect = w / h;
     // Em telas estreitas (retrato), abre o campo de visão para o tabuleiro caber.
     this.camera.fov = w / h < 0.8 ? 50 : 42;
+    // Desloca a projeção para centralizar o tabuleiro fora do painel lateral (apenas telas largas).
+    const inset = w > 900 ? this.leftInset : 0;
+    if (inset) this.camera.setViewOffset(w, h, -inset / 2, 0, w, h);
+    else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
   }
 

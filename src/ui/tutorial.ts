@@ -33,6 +33,7 @@ export class Tutorial {
 
   dispose() {
     clearTimeout(this.resetTimer);
+    this.host.base.view.setLeftInset(0);
     this.match?.dispose();
     this.match = null;
     this.card.remove();
@@ -70,9 +71,11 @@ export class Tutorial {
         { version: 1, state, difficulty: 'easy', playerColor: 'w', undoUsed: 0, startedAt: Date.now(), undoStack: [] },
         this.host.layer,
       );
-      // O cartão do tutorial fica acima do HUD.
+      // O cartão do tutorial fica acima do HUD, e o tabuleiro é recentrado ao lado dele.
       this.host.layer.append(this.card);
+      view.setLeftInset(440);
     } else {
+      view.setLeftInset(0);
       view.setMode('menu');
       view.syncPieces(START_FEN);
     }
