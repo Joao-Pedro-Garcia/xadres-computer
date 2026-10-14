@@ -1,0 +1,27 @@
+{
+  "name": "arcane-chess",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Arcane Chess — xadrez 3D com poderes mágicos, energia, IA e progressão.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "simulate": "SIM=1 vitest run"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/three": "^0.186.0",
+    "typescript": "5.9",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
