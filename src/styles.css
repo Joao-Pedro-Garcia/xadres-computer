@@ -422,3 +422,6 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
 .swatch.scenic .pano { position: absolute; top: 0; left: 50%; height: 100%; width: auto; transform: translateX(-50%); image-rendering: auto; }
 .swatch.scenic .mini-court { position: absolute; left: 50%; bottom: -46px; width: 200px; height: 90px; border-radius: 50%; transform: translateX(-50%); box-shadow: 0 0 18px var(--glow); opacity: 0.95; }
 .swatch.scenic .mini-board3d { position: absolute; left: 50%; bottom: 6px; width: 92px; height: 92px; display: grid; grid-template-columns: repeat(4, 1fr); border: 4px solid; transform: translateX(-50%) rotateX(58deg); transform-origin: bottom; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 16px var(--glow); }
+
+.swatch.pieces.photo { padding: 0; background: radial-gradient(ellipse at 50% 70%, rgba(255, 255, 255, 0.08), transparent 70%); height: 130px; }
+.swatch .skin-photo { width: 100%; height: 100%; object-fit: cover; display: block; }

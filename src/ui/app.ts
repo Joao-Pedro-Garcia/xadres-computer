@@ -394,7 +394,17 @@ export class App {
     }
     if (item.category === 'pieces') {
       const sk = PIECE_SKINS.find((x) => x.id === id)!;
-      return h('div', { class: 'swatch pieces', style: `--glow:${hex(sk.glow)}` }, h('span', { style: `color:${hex(sk.white)}` }, '♛'), h('span', { style: `color:${hex(sk.black)};text-shadow:0 0 6px ${hex(sk.glow)}` }, '♛'));
+      // Foto 3D real do conjunto (gerada sob demanda); enquanto isso, símbolos coloridos.
+      const box = h('div', { class: 'swatch pieces', style: `--glow:${hex(sk.glow)}` }, h('span', { style: `color:${hex(sk.white.base)}` }, '♛'), h('span', { style: `color:${hex(sk.black.base)};text-shadow:0 0 6px ${hex(sk.glow)}` }, '♛'));
+      void import('../render/thumbnail')
+        .then(({ renderSkinThumbnail }) => {
+          const img = h('img', { src: renderSkinThumbnail(sk), alt: t(`items.${item.id}.name`), class: 'skin-photo' });
+          clear(box);
+          box.classList.add('photo');
+          box.append(img);
+        })
+        .catch(() => {});
+      return box;
     }
     if (item.category === 'trail') {
       const tr = TRAILS.find((x) => x.id === id)!;

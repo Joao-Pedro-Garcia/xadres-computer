@@ -4,8 +4,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { Chess } from 'chess.js';
 import type { Color, GameEvent, MovementPowerId, PieceSymbol, Square, UtilityPowerId } from '../core/types';
 import { FILES, fileOf, rankOf, toSquare } from '../core/squares';
-import type { CaptureFxDef, PieceSkinDef, ThemeDef } from '../meta/catalog';
-import { createPiece, createPieceMaterials, disposePiece, type PieceMaterials, type PieceObject } from './pieces';
+import { PIECE_SKINS, type CaptureFxDef, type PieceSkinDef, type ThemeDef } from '../meta/catalog';
+import { createPiece, createPieceMaterials, disposePiece, disposePieceMaterials, type PieceMaterials, type PieceObject } from './pieces';
 import { Fx, getDotTexture } from './fx';
 import { paintPanorama } from './backdrop';
 import { Environment } from './environment';
@@ -162,7 +162,7 @@ export class BoardView {
     });
 
     this.fx = new Fx(this.scene);
-    this.pieceMats = createPieceMaterials({ id: 'x', white: 0xffffff, black: 0x111111, metalness: 0.1, roughness: 0.4, glow: 0x4f8dff });
+    this.pieceMats = createPieceMaterials(PIECE_SKINS[0]);
 
     this.buildLights();
     this.buildBoard();
@@ -436,8 +436,7 @@ export class BoardView {
   }
 
   setSkin(skin: PieceSkinDef, fen?: string) {
-    const old = this.pieceMats;
-    for (const m of [old.w, old.b, old.glowW, old.glowB]) m.dispose();
+    disposePieceMaterials(this.pieceMats);
     this.pieceMats = createPieceMaterials(skin, this.opts.quality === 'low');
     if (fen) this.syncPieces(fen, true);
   }
@@ -1027,7 +1026,7 @@ export class BoardView {
     );
     // 3. Explosão: estilhaços com o material da peça, clarão e onda de choque.
     const at = victim.position.clone();
-    this.fx.shatter(at, mat, color, dir, 30);
+    this.fx.shatter(at, mat.primary, color, dir, 30);
     this.fx.burst(at, { count: 60, color, speed: 3.6, life: 0.9, size: 0.13 });
     this.fx.burst(at, { count: 30, color: 0xffffff, speed: 2, life: 0.5, size: 0.08 });
     this.fx.flash(at, color, 10);

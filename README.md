@@ -149,6 +149,16 @@ Depois do efeito, a peça capturada é arremessada e se estilhaça. Com "Reduzir
 
 Cada tema da loja tem um cenário próprio: um panorama pintado por código (céu, sol/lua/eclipse/planetas, aurora, montanhas e castelo no estilo do tema — gótico, palácio, fortaleza, gelo, templo ou ilha flutuante) que acompanha a rotação da câmera, um pátio flutuante com braseiros e objetos temáticos (pinheiros, cristais, obeliscos, agulhas de obsidiana, gelo, rochas de lava, asteroides ou colunas) e clima (vaga-lumes, neve, brasas, partículas mágicas).
 
+## Conjuntos de peças
+
+Três formatos modelados por código (`src/render/pieces.ts`), cada parte com seu material (corpo, metal, gema ou cravejado):
+
+- **Clássico (Staunton):** Marfim e Ébano (grátis), Madeira de Torneio, Mármore Clássico, Ouro e Prata, Jade e Obsidiana.
+- **Luxo:** base larga de alabastro fosco com faixas de metal, haste metálica e topos cravejados (pavé): Alabastro Real (ouro × ônix e prata), Cristal, Diamante (inteiramente cravejado).
+- **Régio:** alto e esguio, base e golas de ouro, corpo de pedra ou madeira e pedras preciosas: Âmbar e Ouro, Esmeralda Imperial (malaquita).
+
+A loja mostra uma foto 3D real de cada conjunto (`src/render/thumbnail.ts`).
+
 ## Música
 
 Trilha ambiente calma gerada pelo próprio jogo com WebAudio (`src/ui/music.ts`): acordes suaves em lá menor, baixo grave e notas esparsas com eco — sem arquivos de áudio externos. Começa após o primeiro toque/clique (exigência dos navegadores), pausa quando a aba fica em segundo plano e pode ser desligada pelo botão **♫ Música** no menu e na partida, ou ajustada em Configurações → Áudio (volume da música, multiplicado pelo volume geral).

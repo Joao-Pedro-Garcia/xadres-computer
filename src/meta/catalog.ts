@@ -61,20 +61,54 @@ export const THEMES: ThemeDef[] = [
   { id: 'ancientMarble', light: 0xf2f0ea, dark: 0x8a8f96, frame: 0x3c3e44, roughness: 0.25, metalness: 0.05, ambient: 0x909098, key: 0xffffff, rim: 0xb0c8ff, particle: 0xffffff, background: 0x0a0b0e, fog: 0x0a0b0e, scenery: { sky: [0x2a5a9a, 0x7ab0e0, 0xf0f4f8], celestial: 'sun', celestialColor: 0xffffff, stars: false, mountains: [0x8aa0b8, 0x6a7a8a], castle: { style: 'temple', stone: 0xeeeae2, roof: 0xd0ccc4, window: 0xfff8e0 }, mist: 0xf4f6f8, props: 'columns', propColor: 0xeeeae2, propGlow: 0xfff0c0, ground: 0xc8c4b8, weather: 'motes' } },
 ];
 
+/** Materiais de um lado (brancas ou pretas) de um conjunto de peças. */
+export interface SideMaterials {
+  /** Corpo principal (marfim, madeira, alabastro, malaquita, metal…). */
+  base: number;
+  baseRoughness: number;
+  baseMetalness: number;
+  /** Corpo translúcido/fosco (alabastro, cristal). */
+  frosted?: boolean;
+  /** Metal das faixas, hastes e coroas. */
+  metal: number;
+  /** Pedras preciosas. */
+  gem: number;
+  /** Partes cravejadas (pavé de diamantes). */
+  pave: boolean;
+}
+
 export interface PieceSkinDef {
   id: string;
-  white: number;
-  black: number;
-  metalness: number;
-  roughness: number;
+  /** Formato: clássico de torneio, luxo (base de alabastro + topo cravejado) ou régio (alto, com golas e gemas). */
+  style: 'staunton' | 'luxe' | 'regal';
+  white: SideMaterials;
+  black: SideMaterials;
   glow: number;
 }
 
+const side = (base: number, metal: number, gem: number, o: Partial<SideMaterials> = {}): SideMaterials => ({
+  base,
+  baseRoughness: 0.35,
+  baseMetalness: 0.1,
+  metal,
+  gem,
+  pave: false,
+  ...o,
+});
+
 export const PIECE_SKINS: PieceSkinDef[] = [
-  { id: 'ivoryEbony', white: 0xf1e8d6, black: 0x1c1a22, metalness: 0.1, roughness: 0.35, glow: 0x4f8dff },
-  { id: 'goldSilver', white: 0xe8c66a, black: 0x8c95a6, metalness: 0.85, roughness: 0.25, glow: 0xffd27a },
-  { id: 'crystal', white: 0xd8f2ff, black: 0x3a2a6a, metalness: 0.2, roughness: 0.05, glow: 0x7ae0ff },
-  { id: 'obsidianJade', white: 0x5fd0a0, black: 0x141418, metalness: 0.3, roughness: 0.15, glow: 0x5fffb0 },
+  // Clássicos
+  { id: 'ivoryEbony', style: 'staunton', white: side(0xf1e8d6, 0xd4b46a, 0xffffff), black: side(0x1c1a22, 0xb0b8c8, 0xffffff), glow: 0x4f8dff },
+  { id: 'woodTournament', style: 'staunton', white: side(0xe3c48e, 0xc89a4a, 0xffffff, { baseRoughness: 0.55 }), black: side(0x5a2a18, 0xc89a4a, 0xffffff, { baseRoughness: 0.5 }), glow: 0xffc870 },
+  { id: 'marbleClassic', style: 'staunton', white: side(0xf4f2ee, 0xc0c0c8, 0xffffff, { baseRoughness: 0.18 }), black: side(0x2a2c30, 0xc0c0c8, 0xffffff, { baseRoughness: 0.18 }), glow: 0xbfd8ff },
+  { id: 'goldSilver', style: 'staunton', white: side(0xe8c66a, 0xfff0b0, 0xffffff, { baseMetalness: 0.85, baseRoughness: 0.25 }), black: side(0x8c95a6, 0xe0e6f0, 0xffffff, { baseMetalness: 0.85, baseRoughness: 0.25 }), glow: 0xffd27a },
+  // Ricos
+  { id: 'crystal', style: 'luxe', white: side(0xe0f6ff, 0xdfe6f0, 0x7ae0ff, { frosted: true, baseRoughness: 0.08 }), black: side(0x3a2a6a, 0xdfe6f0, 0xb08aff, { frosted: true, baseRoughness: 0.08 }), glow: 0x7ae0ff },
+  { id: 'amberGold', style: 'regal', white: side(0xd89a50, 0xf0c050, 0xffb040, { baseRoughness: 0.3 }), black: side(0x4a2410, 0xf0c050, 0x5fd0a0, { baseRoughness: 0.3 }), glow: 0xffc870 },
+  { id: 'alabasterGold', style: 'luxe', white: side(0xf2ece0, 0xf4c95a, 0xffffff, { frosted: true, baseRoughness: 0.45, pave: true }), black: side(0x1e1c22, 0xe4e8f0, 0xffffff, { baseRoughness: 0.2, pave: true }), glow: 0xffe2a0 },
+  { id: 'malachiteGold', style: 'regal', white: side(0xf2ead8, 0xf4c95a, 0xffffff, { baseRoughness: 0.25 }), black: side(0x0e5a3a, 0xf4c95a, 0x3affa0, { baseRoughness: 0.15 }), glow: 0x5fffb0 },
+  { id: 'obsidianJade', style: 'staunton', white: side(0x5fd0a0, 0xd4b46a, 0xffffff, { baseMetalness: 0.3, baseRoughness: 0.15 }), black: side(0x141418, 0x9a8a6a, 0xffffff, { baseMetalness: 0.3, baseRoughness: 0.15 }), glow: 0x5fffb0 },
+  { id: 'diamondPave', style: 'luxe', white: side(0xeef2f8, 0xf4f6fa, 0xffffff, { baseMetalness: 0.9, baseRoughness: 0.12, pave: true }), black: side(0x23262c, 0xbfc6d2, 0xffffff, { baseMetalness: 0.9, baseRoughness: 0.12, pave: true }), glow: 0xe8f4ff },
 ];
 
 export interface TrailDef {
@@ -109,9 +143,15 @@ export const CATALOG: CatalogItem[] = [
   { id: 'theme:cosmos', category: 'theme', unlock: { coins: 800, level: 8 } },
   { id: 'theme:ancientMarble', category: 'theme', unlock: { achievement: 'firstCheckmate' } },
   { id: 'pieces:ivoryEbony', category: 'pieces', unlock: {} },
+  { id: 'pieces:woodTournament', category: 'pieces', unlock: { coins: 120 } },
+  { id: 'pieces:marbleClassic', category: 'pieces', unlock: { coins: 200 } },
   { id: 'pieces:goldSilver', category: 'pieces', unlock: { coins: 250, level: 2 } },
   { id: 'pieces:crystal', category: 'pieces', unlock: { coins: 450, level: 4 } },
+  { id: 'pieces:amberGold', category: 'pieces', unlock: { coins: 650, level: 5 } },
+  { id: 'pieces:alabasterGold', category: 'pieces', unlock: { coins: 900, level: 6 } },
+  { id: 'pieces:malachiteGold', category: 'pieces', unlock: { coins: 1200, level: 8 } },
   { id: 'pieces:obsidianJade', category: 'pieces', unlock: { achievement: 'winMaster' } },
+  { id: 'pieces:diamondPave', category: 'pieces', unlock: { achievement: 'grandArcanist', coins: 1500 } },
   { id: 'trail:arcaneSpark', category: 'trail', unlock: {} },
   { id: 'trail:goldenDust', category: 'trail', unlock: { coins: 200 } },
   { id: 'trail:voidMist', category: 'trail', unlock: { level: 6 } },
