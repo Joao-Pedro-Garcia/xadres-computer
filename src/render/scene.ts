@@ -26,11 +26,18 @@ export interface EffectsView {
 
 export interface RenderOptions {
   quality: 'low' | 'medium' | 'high';
+  /** Quando verdadeiro, a resolução é reduzida automaticamente se o FPS cair. */
+  autoQuality: boolean;
   shadows: boolean;
   particles: 'off' | 'reduced' | 'full';
   cameraMotion: boolean;
+  reduceMotion: boolean;
   coordinates: boolean;
-  animations: 'full' | 'fast' | 'skip';
+  animations: 'full' | 'skip';
+  animationSpeed: number;
+  cameraSensitivity: number;
+  touchRotate: 'oneFinger' | 'twoFingers';
+  highContrast: boolean;
 }
 
 const PIECE_FX: Record<PieceSymbol, { color: number; color2: number }> = {
@@ -77,7 +84,24 @@ export class BoardView {
   private runeCircle: THREE.Mesh | null = null;
   private mode: 'menu' | 'game' = 'menu';
   private orientation: Color = 'w';
-  private opts: RenderOptions = { quality: 'high', shadows: true, particles: 'full', cameraMotion: true, coordinates: true, animations: 'full' };
+  private opts: RenderOptions = {
+    quality: 'high',
+    autoQuality: false,
+    shadows: true,
+    particles: 'full',
+    cameraMotion: true,
+    reduceMotion: false,
+    coordinates: true,
+    animations: 'full',
+    animationSpeed: 1,
+    cameraSensitivity: 1,
+    touchRotate: 'oneFinger',
+    highContrast: false,
+  };
+  /** Redução dinâmica de resolução no modo automático. */
+  private autoScale = 1;
+  private fpsFrames = 0;
+  private fpsTime = 0;
   private trailColor = 0x5fc8ff;
   private captureFx: CaptureFxDef = { id: 'standard', intensity: 1, tint: null };
   private selected: PieceObject | null = null;
@@ -340,9 +364,18 @@ export class BoardView {
   }
 
   setOptions(o: RenderOptions) {
-    this.opts = o;
-    const pr = o.quality === 'low' ? 1 : o.quality === 'medium' ? 1.5 : 2;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pr));
+    // Redução de movimento desliga movimentos de câmera e tremores.
+    this.opts = { ...o, cameraMotion: o.cameraMotion && !o.reduceMotion };
+    o = this.opts;
+    this.autoScale = 1;
+    this.applyPixelRatio();
+    this.controls.rotateSpeed = 0.7 * o.cameraSensitivity;
+    this.controls.zoomSpeed = o.cameraSensitivity;
+    this.controls.panSpeed = o.cameraSensitivity;
+    // Em 'twoFingers', um dedo nunca gira a câmera (evita giros acidentais ao tocar nas peças).
+    this.controls.touches = o.touchRotate === 'twoFingers'
+      ? { ONE: null as unknown as THREE.TOUCH, TWO: THREE.TOUCH.DOLLY_ROTATE }
+      : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
     this.renderer.shadowMap.enabled = o.shadows;
     this.keyLight.castShadow = o.shadows;
     this.keyLight.shadow.mapSize.set(o.quality === 'high' ? 2048 : 1024, o.quality === 'high' ? 2048 : 1024);
@@ -350,12 +383,40 @@ export class BoardView {
     (this.keyLight.shadow as { map: unknown }).map = null;
     this.pieces.forEach((p) => p.children.forEach((c) => ((c as THREE.Mesh).castShadow = o.shadows && c !== p.userData.ring)));
     this.fx.density = o.particles === 'off' ? 0 : o.particles === 'reduced' ? 0.45 : 1;
-    this.tweens.speed = o.animations === 'fast' ? 2.2 : 1;
+    this.tweens.speed = o.animationSpeed;
+    this.fx.intense = !o.reduceMotion;
     this.accentA.visible = this.accentB.visible = o.quality !== 'low';
     this.buildMotes();
     this.buildCoordinates();
     if (this.theme) this.setTheme(this.theme);
     this.resize();
+  }
+
+  private applyPixelRatio() {
+    const pr = this.opts.quality === 'low' ? 1 : this.opts.quality === 'medium' ? 1.5 : 2;
+    this.renderer.setPixelRatio(Math.max(0.75, Math.min(window.devicePixelRatio || 1, pr) * this.autoScale));
+  }
+
+  /** Modo automático: mede o FPS e reduz a resolução se o aparelho não acompanhar. */
+  private adaptQuality(dt: number) {
+    if (!this.opts.autoQuality || document.hidden) return;
+    this.fpsFrames++;
+    this.fpsTime += dt;
+    if (this.fpsTime < 3) return;
+    const fps = this.fpsFrames / this.fpsTime;
+    this.fpsFrames = 0;
+    this.fpsTime = 0;
+    if (fps < 40 && this.autoScale > 0.6) {
+      this.autoScale -= 0.15;
+      this.applyPixelRatio();
+      if (this.autoScale < 0.8 && this.renderer.shadowMap.enabled) {
+        this.renderer.shadowMap.enabled = false;
+        this.keyLight.castShadow = false;
+      }
+    } else if (fps > 57 && this.autoScale < 1) {
+      this.autoScale = Math.min(1, this.autoScale + 0.1);
+      this.applyPixelRatio();
+    }
   }
 
   setMode(mode: 'menu' | 'game') {
@@ -507,6 +568,7 @@ export class BoardView {
   }
 
   private overlay(sq: Square, geo: THREE.BufferGeometry, color: number, opacity: number, y = 0.012, pulse = false, additive = false) {
+    if (this.opts.highContrast) opacity = Math.min(1, opacity * 1.6);
     const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide });
     mat.userData.base = opacity;
     const m = new THREE.Mesh(geo, mat);
@@ -880,14 +942,17 @@ export class BoardView {
 
   private frame() {
     this.clock.update();
-    const dt = Math.min(0.05, this.clock.getDelta());
+    const rawDt = this.clock.getDelta();
+    this.adaptQuality(rawDt);
+    const dt = Math.min(0.05, rawDt);
     const time = this.clock.getElapsed();
     this.tweens.tick(performance.now());
     this.fx.update(dt);
     if (this.mode === 'menu') {
       this.menuAngle += dt * (this.opts.cameraMotion ? 0.08 : 0);
       const r = 12;
-      this.camera.position.set(Math.sin(this.menuAngle) * r, 6.5 + Math.sin(time * 0.3) * 0.4, Math.cos(this.menuAngle) * r);
+      const bob = this.opts.cameraMotion ? Math.sin(time * 0.3) * 0.4 : 0;
+      this.camera.position.set(Math.sin(this.menuAngle) * r, 6.5 + bob, Math.cos(this.menuAngle) * r);
       this.camera.lookAt(0, 0.2, 0);
     } else {
       this.controls.update();
@@ -910,7 +975,7 @@ export class BoardView {
     if (this.runeCircle) this.runeCircle.rotation.z = time * 0.03;
     this.accentA.position.set(Math.sin(time * 0.4) * 5, 2.5, Math.cos(time * 0.4) * 5);
     this.accentB.position.set(-Math.sin(time * 0.3) * 5, 2.2, -Math.cos(time * 0.3) * 5);
-    const pulse = 0.65 + Math.sin(time * 4) * 0.35;
+    const pulse = this.opts.reduceMotion ? 1 : 0.65 + Math.sin(time * 4) * 0.35;
     for (const m of this.pulseMats) m.opacity = (m.userData.base as number) * pulse;
     if (this.selected) {
       this.selected.userData.material.emissiveIntensity = 0.18 + Math.sin(time * 4) * 0.12;

@@ -30,6 +30,7 @@ export interface MatchHost {
   confirm: (msg: string) => Promise<boolean>;
   onFinished: (g: SavedGame) => void;
   onExit: () => void;
+  openSettings: () => void;
 }
 
 interface Selection {
@@ -45,6 +46,8 @@ export class Match {
   private busy = false;
   private aiThinking = false;
   private disposed = false;
+  /** Inversão temporária pelo botão do HUD (somada à configuração salva). */
+  private flipped = false;
   private turnStart: GameState;
   private root: HTMLElement;
   private els!: {
@@ -83,7 +86,7 @@ export class Match {
 
   private viewColor(): Color {
     const s = this.host.settings();
-    return s.flipView ? opposite(this.g.playerColor) : this.g.playerColor;
+    return s.flipView !== this.flipped ? opposite(this.g.playerColor) : this.g.playerColor;
   }
 
   dispose() {
@@ -120,6 +123,7 @@ export class Match {
       undo,
       h('button', { class: 'btn ghost', onclick: () => this.host.view.resetCamera() }, '⟲ ', t('game.resetCamera')),
       h('button', { class: 'btn ghost', onclick: () => this.flip() }, '⇅ ', t('game.flip')),
+      h('button', { class: 'btn ghost', onclick: () => this.host.openSettings() }, '⚙ ', t('menu.settings')),
       h('button', { class: 'btn ghost danger', onclick: () => void this.resign() }, '⚑ ', t('game.resign')),
     );
     this.root.append(top, status, actions, sidebar, powerPanel, skip);
@@ -166,7 +170,14 @@ export class Match {
     let status = '';
     if (st.result) status = '';
     else if (this.aiThinking) status = t('game.aiTurn');
-    else if (myTurn) status = chess.inCheck() ? `${t('game.check')} · ${t('game.yourTurn')}` : t('game.yourTurn');
+    else if (myTurn) {
+      status = chess.inCheck() ? `${t('game.check')} · ${t('game.yourTurn')}` : t('game.yourTurn');
+      const sel = this.sel;
+      if (sel) {
+        const p = chess.get(sel.square);
+        if (p) status += ` · ${t(sel.targeting ? 'game.choosingTarget' : 'game.selected', { piece: t(`pieces.${p.type}`), square: sel.square, n: sel.targeting ? sel.power?.targets.length ?? 0 : sel.moves.length })}`;
+      }
+    }
     else if (chess.inCheck()) status = t('game.check');
     clear(this.els.status);
     if (status) this.els.status.append(this.aiThinking ? h('span', { class: 'spinner' }) : '', status);
@@ -481,10 +492,25 @@ export class Match {
   }
 
   private flip() {
-    const s = this.host.settings();
-    s.flipView = !s.flipView;
+    this.flipped = !this.flipped;
+    this.orientationChanged();
+  }
+
+  /** Reaplica a orientação do tabuleiro (botão do HUD ou configuração). */
+  orientationChanged() {
     this.host.view.setOrientation(this.viewColor());
     this.host.view.resetCamera();
+  }
+
+  /** Recria o HUD (ex.: troca de idioma) sem reiniciar a partida. */
+  relabel() {
+    if (this.disposed) return;
+    const collapsed = this.els.sidebar.classList.contains('collapsed');
+    window.removeEventListener('keydown', this.onKey);
+    clear(this.root);
+    this.buildHud();
+    this.els.sidebar.classList.toggle('collapsed', collapsed);
+    this.refresh();
   }
 
   private async resign() {

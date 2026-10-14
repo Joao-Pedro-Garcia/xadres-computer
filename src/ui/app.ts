@@ -21,7 +21,8 @@ import {
 } from '../meta/profile';
 import { historyScreen } from './screens/history';
 import { MAX_HISTORY, buildHistoryEntry, type HistoryFilter, buildSummary, isHistory, validateSaved, type HistoryEntry, type SavedGame } from '../meta/session';
-import { sanitizeSettings, type Settings } from '../meta/settings';
+import { defaultSettings, resolveQuality, sanitizeSettings, type Settings } from '../meta/settings';
+import { settingsScreen } from './screens/settings';
 import { KEYS, defaultStore, readJson, writeJson, type KeyValueStore } from '../meta/storage';
 import { AiClient } from '../ai/client';
 import { BoardView } from '../render/scene';
@@ -30,7 +31,7 @@ import { Audio } from './audio';
 import { clear, h, hex } from './dom';
 import { Match } from './match';
 
-type Screen = 'menu' | 'newGame' | 'shop' | 'achievements' | 'history' | 'tutorial' | 'settings' | 'credits';
+type Screen = 'menu' | 'newGame' | 'shop' | 'achievements' | 'history' | 'tutorial' | 'settings' | 'credits' | 'game';
 
 export class App {
   private store: KeyValueStore = defaultStore();
@@ -43,6 +44,7 @@ export class App {
   private audio = new Audio();
   private ui: HTMLElement;
   private screenEl: HTMLElement;
+  private hudLayer: HTMLElement;
   private toasts: HTMLElement;
   private match: Match | null = null;
   private shopTab: ItemCategory = 'theme';
@@ -59,8 +61,9 @@ export class App {
     setLang(this.settings.lang);
     this.ui = h('div', { class: 'ui' });
     this.screenEl = h('div', { class: 'screen-host' });
+    this.hudLayer = h('div', { class: 'hud-layer' });
     this.toasts = h('div', { class: 'toasts', 'aria-live': 'polite' });
-    this.ui.append(this.screenEl, this.toasts);
+    this.ui.append(this.hudLayer, this.screenEl, this.toasts);
     if (rawSaved && !this.saved) {
       this.store.removeItem(KEYS.savedGame);
       setTimeout(() => this.toast(t('errors.corruptSave'), 'error'), 600);
@@ -82,8 +85,7 @@ export class App {
     if (new URLSearchParams(location.search).has('debug')) {
       (window as unknown as Record<string, unknown>).__arcane = { project: (x: number, z: number) => this.view.project(x, z) };
     }
-    this.audio.enabled = this.settings.sound;
-    this.audio.volume = this.settings.volume;
+    this.applySettings();
     document.getElementById('loading')?.remove();
     this.show('menu');
   }
@@ -115,7 +117,20 @@ export class App {
     const trail = TRAILS.find((x) => `trail:${x.id}` === eq.trail) ?? TRAILS[0];
     const cap = CAPTURE_FX.find((x) => `capture:${x.id}` === eq.capture) ?? CAPTURE_FX[0];
     const s = this.settings;
-    this.view.setOptions({ quality: s.quality, shadows: s.shadows, particles: s.particles, cameraMotion: s.cameraMotion, coordinates: s.coordinates, animations: s.animations });
+    this.view.setOptions({
+      quality: resolveQuality(s.quality),
+      autoQuality: s.quality === 'auto',
+      shadows: s.shadows && resolveQuality(s.quality) !== 'low',
+      particles: s.particles,
+      cameraMotion: s.cameraMotion,
+      reduceMotion: s.reduceMotion,
+      coordinates: s.coordinates,
+      animations: s.animations,
+      animationSpeed: s.animationSpeed,
+      cameraSensitivity: s.cameraSensitivity,
+      touchRotate: s.touchRotate,
+      highContrast: s.highContrast,
+    });
     this.view.setTheme(theme);
     this.view.setSkin(skin, this.match ? undefined : START_FEN);
     this.view.setTrail(trail.color);
@@ -154,6 +169,7 @@ export class App {
   }
 
   private header(title: string, back: Screen = 'menu') {
+    if (this.match && back === 'menu') back = 'game';
     return h(
       'div',
       { class: 'screen-header' },
@@ -183,6 +199,8 @@ export class App {
       this.applyVisuals();
     }
     clear(this.screenEl);
+    // 'game' volta para a partida em andamento (o HUD fica em outra camada e não é recriado).
+    if (screen === 'game') return;
     const el = this[`screen_${screen}`]();
     el.classList.add('screen', `screen-${screen}`);
     this.screenEl.append(el);
@@ -438,59 +456,55 @@ export class App {
   }
 
   private screen_settings() {
-    const s = this.settings;
-    const update = (patch: Partial<Settings>) => {
-      Object.assign(this.settings, patch);
-      this.settings = sanitizeSettings(this.settings);
-      this.saveSettings();
-      setLang(this.settings.lang);
-      this.audio.enabled = this.settings.sound;
-      this.audio.volume = this.settings.volume;
-      this.applyVisuals();
-      this.show('settings');
-    };
-    const seg = <T extends string>(label: string, value: T, options: [T, string][], key: keyof Settings) =>
-      h('div', { class: 'setting' }, h('label', {}, label), h('div', { class: 'seg' }, options.map(([v, l]) => h('button', { class: `seg-btn ${value === v ? 'selected' : ''}`, onclick: () => update({ [key]: v } as Partial<Settings>) }, l))));
-    const toggle = (label: string, key: keyof Settings) =>
-      h('div', { class: 'setting' }, h('label', {}, label), h('button', { class: `toggle ${s[key] ? 'on' : ''}`, role: 'switch', 'aria-checked': String(!!s[key]), onclick: () => update({ [key]: !s[key] } as Partial<Settings>) }, h('span', {})));
-    const volume = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: s.volume }) as HTMLInputElement;
-    volume.addEventListener('change', () => update({ volume: Number(volume.value) }));
-    return h(
-      'div',
-      {},
-      this.header(t('settings.title')),
-      h(
-        'div',
-        { class: 'panel content settings' },
-        seg(t('settings.language'), s.lang, [['pt-BR', 'Português (BR)'], ['en', 'English']], 'lang'),
-        h('h3', {}, t('settings.graphics')),
-        seg(t('settings.quality'), s.quality, [['low', t('settings.low')], ['medium', t('settings.medium')], ['high', t('settings.high')]], 'quality'),
-        toggle(t('settings.shadows'), 'shadows'),
-        seg(t('settings.particles'), s.particles, [['off', t('settings.particlesOff')], ['reduced', t('settings.particlesReduced')], ['full', t('settings.particlesFull')]], 'particles'),
-        seg(t('settings.animations'), s.animations, [['full', t('settings.animFull')], ['fast', t('settings.animFast')], ['skip', t('settings.animSkip')]], 'animations'),
-        toggle(t('settings.cameraMotion'), 'cameraMotion'),
-        toggle(t('settings.coordinates'), 'coordinates'),
-        h('h3', {}, t('settings.gameplay')),
-        toggle(t('settings.flipView'), 'flipView'),
-        toggle(t('settings.allowUndo'), 'allowUndo'),
-        h('h3', {}, t('settings.audio')),
-        toggle(t('settings.sound'), 'sound'),
-        h('div', { class: 'setting' }, h('label', {}, t('settings.volume')), volume),
-        h('h3', {}, t('settings.data')),
-        h('p', { class: 'note' }, t('settings.storageNote')),
-        h('button', { class: 'btn ghost danger', onclick: async () => {
-          if (!(await this.confirm(t('settings.resetConfirm')))) return;
-          this.profile = newProfile();
-          this.history = [];
-          this.saveProfile();
-          this.persist(KEYS.history, []);
-          this.saveGame(null);
-          this.applyVisuals();
-          this.toast(t('settings.resetDone'), 'success');
-          this.show('settings');
-        } }, t('settings.resetProgress')),
-      ),
-    );
+    return settingsScreen({
+      header: this.header(t('settings.title'), this.match ? 'game' : 'menu'),
+      settings: this.settings,
+      inMatch: !!this.match,
+      update: (patch) => this.updateSettings(patch),
+      restoreDefaults: async () => {
+        if (!(await this.confirm(t('settings.restoreConfirm')))) return;
+        const keep = { difficulty: this.settings.difficulty, playerColor: this.settings.playerColor };
+        this.settings = { ...defaultSettings(), ...keep };
+        this.applySettings();
+        this.toast(t('settings.restored'), 'success');
+        this.show('settings');
+      },
+      resetProgress: async () => {
+        if (!(await this.confirm(t('settings.resetConfirm')))) return;
+        this.profile = newProfile();
+        this.history = [];
+        this.saveProfile();
+        this.persist(KEYS.history, []);
+        this.saveGame(null);
+        this.applyVisuals();
+        this.toast(t('settings.resetDone'), 'success');
+        this.show('settings');
+      },
+    });
+  }
+
+  /** Aplica uma alteração de configuração imediatamente e salva no dispositivo. */
+  updateSettings(patch: Partial<Settings>) {
+    const before = this.settings;
+    this.settings = sanitizeSettings({ ...this.settings, ...patch });
+    // Ligar "redução de movimento" também desliga os movimentos de câmera (e vice-versa ao desligar).
+    if (patch.reduceMotion !== undefined) this.settings.cameraMotion = !patch.reduceMotion;
+    this.applySettings();
+    if (before.flipView !== this.settings.flipView) this.match?.orientationChanged();
+    this.show('settings');
+  }
+
+  private applySettings() {
+    this.saveSettings();
+    setLang(this.settings.lang);
+    this.audio.enabled = this.settings.sound;
+    this.audio.volume = this.settings.masterVolume * this.settings.sfxVolume;
+    const root = document.documentElement.classList;
+    root.toggle('high-contrast', this.settings.highContrast);
+    root.toggle('large-text', this.settings.largeText);
+    root.toggle('reduce-motion', this.settings.reduceMotion);
+    if (this.view) this.applyVisuals();
+    this.match?.relabel();
   }
 
   private screen_credits() {
@@ -528,9 +542,10 @@ export class App {
         confirm: (m) => this.confirm(m),
         onFinished: (x) => this.finish(x),
         onExit: () => this.exitMatch(),
+        openSettings: () => this.show('settings'),
       },
       g,
-      this.screenEl,
+      this.hudLayer,
     );
   }
 

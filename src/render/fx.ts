@@ -50,6 +50,8 @@ export class Fx {
   private transients: Transient[] = [];
   /** Multiplicador global de partículas (0 = desligado). */
   density = 1;
+  /** Falso quando o jogador pede redução de movimento: luzes piscantes e feixes ficam suaves. */
+  intense = true;
 
   constructor(private scene: THREE.Scene) {}
 
@@ -151,6 +153,7 @@ export class Fx {
   }
 
   flash(pos: THREE.Vector3, color: number, intensity = 6, life = 0.45) {
+    if (!this.intense) intensity *= 0.35;
     const light = new THREE.PointLight(color, intensity, 5, 2);
     light.position.copy(pos);
     light.position.y += 0.6;

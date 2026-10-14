@@ -304,3 +304,37 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
 .mini-board .pw { color: #fff; text-shadow: 0 0 2px #000, 0 0 1px #000; }
 .mini-board .pb { color: #111; text-shadow: 0 0 2px rgba(255, 255, 255, 0.5); }
 .move-list.detail { max-height: 200px; columns: 2; }
+
+/* ---------- Configurações ---------- */
+.setting-label { display: flex; flex-direction: column; gap: 2px; max-width: 60%; }
+.setting-label small { font-size: 12px; }
+.slider { display: flex; align-items: center; gap: 10px; }
+.slider-value { min-width: 44px; text-align: right; color: var(--gold); font-weight: 700; }
+.toggle { width: auto; min-width: 84px; height: 34px; padding: 0 10px 0 40px; display: inline-flex; align-items: center; }
+.toggle span { top: 5px; }
+.toggle.on span { transform: translateX(0); left: auto; right: 5px; }
+.toggle.on { padding: 0 40px 0 10px; }
+.toggle-text { font-style: normal; font-size: 12px; font-weight: 700; }
+.modal-actions.left { justify-content: flex-start; }
+.hud-layer { position: absolute; inset: 0; pointer-events: none; }
+.hud-layer > * { pointer-events: none; }
+
+/* ---------- Acessibilidade ---------- */
+.large-text body { font-size: 18px; }
+.large-text .menu-item { font-size: 18px; }
+.large-text .btn { font-size: 16px; }
+.large-text .hud-actions .btn { font-size: 15px; }
+.large-text .power-desc, .large-text .note, .large-text .card-body p, .large-text .ach p, .large-text .hist-meta { font-size: 15px; }
+.large-text .player-name, .large-text .hud-status { font-size: 16px; }
+.high-contrast { --panel: rgba(4, 6, 12, 0.96); --panel-strong: #04060c; --border: rgba(255, 220, 140, 0.75); --border-blue: rgba(120, 210, 255, 0.85); --muted: #d4dae6; --text: #ffffff; }
+.high-contrast .panel, .high-contrast .player-card, .high-contrast .modal { backdrop-filter: none; -webkit-backdrop-filter: none; border-width: 2px; }
+.high-contrast .btn, .high-contrast .seg-btn, .high-contrast .menu-item { border-width: 2px; }
+.high-contrast .btn.ghost { background: #0b0f1a; border-color: rgba(255, 255, 255, 0.6); }
+.high-contrast .seg-btn.selected { outline: 2px solid #fff; }
+.high-contrast .hud-status { background: #000; border-width: 2px; }
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+/* Áreas de toque confortáveis em telas de toque. */
+@media (pointer: coarse) {
+  .btn, .seg-btn, .menu-item, .toggle { min-height: 44px; }
+  .hud-actions .btn { min-height: 42px; }
+}

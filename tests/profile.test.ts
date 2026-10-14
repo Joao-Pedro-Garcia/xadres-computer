@@ -95,10 +95,29 @@ describe('loja', () => {
 
 describe('persistência', () => {
   it('configurações inválidas voltam ao padrão', () => {
-    const s = sanitizeSettings({ lang: 'xx', volume: 9, shadows: 'yes' });
+    const s = sanitizeSettings({ lang: 'xx', masterVolume: 9, shadows: 'yes', quality: 'ultra' });
     expect(['pt-BR', 'en']).toContain(s.lang);
-    expect(s.volume).toBe(1);
+    expect(s.masterVolume).toBe(1);
     expect(typeof s.shadows).toBe('boolean');
+    expect(s.quality).toBe('auto');
+  });
+
+  it('migra configurações da versão 1', () => {
+    const s = sanitizeSettings({ version: 1, lang: 'en', animations: 'fast', volume: 0.3 });
+    expect(s.version).toBe(2);
+    expect(s.lang).toBe('en');
+    expect(s.animations).toBe('full');
+    expect(s.animationSpeed).toBe(2);
+    expect(s.masterVolume).toBe(0.3);
+    expect(s).not.toHaveProperty('volume');
+  });
+
+  it('qualidade automática escolhe pelo aparelho', async () => {
+    const { resolveQuality } = await import('../src/meta/settings');
+    expect(resolveQuality('auto', { coarse: true, cores: 4, dpr: 3 })).toBe('low');
+    expect(resolveQuality('auto', { coarse: true, cores: 8, dpr: 3 })).toBe('medium');
+    expect(resolveQuality('auto', { coarse: false, cores: 8, dpr: 1 })).toBe('high');
+    expect(resolveQuality('low')).toBe('low');
   });
 
   it('partida salva corrompida é descartada', () => {
