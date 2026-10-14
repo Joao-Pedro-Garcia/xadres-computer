@@ -130,3 +130,21 @@ describe('progresso de conquistas', () => {
     expect(r.report.achievements).not.toContain('power_arcaneStep');
   });
 });
+
+describe('histórico', () => {
+  it('registro completo e filtros', async () => {
+    const { buildHistoryEntry, filterHistory, formatDuration } = await import('../src/meta/session');
+    const g = createGame();
+    const saved = { version: 1 as const, state: { ...g, result: { winner: 'w' as const, reason: 'checkmate' as const } }, difficulty: 'hard' as const, playerColor: 'w' as const, undoUsed: 0, startedAt: 1000, undoStack: [] };
+    const m = match({ startedAt: 1000, endedAt: 66000, difficulty: 'hard', playerPowers: ['surge'] });
+    const e = buildHistoryEntry(saved, m, finalizeMatch(newProfile(), m).report);
+    expect(e.durationMs).toBe(65000);
+    expect(formatDuration(e.durationMs!)).toBe('1:05');
+    expect(e.finalFen).toBe(g.fen);
+    expect(e.powersUsed).toEqual(['surge']);
+    expect(e).not.toHaveProperty('email');
+    const list = [e, { ...e, gameId: 'x', outcome: 'loss' as const, difficulty: 'easy' as const }];
+    expect(filterHistory(list, { outcome: 'win', difficulty: 'all' })).toHaveLength(1);
+    expect(filterHistory(list, { outcome: 'all', difficulty: 'easy' })[0].gameId).toBe('x');
+  });
+});

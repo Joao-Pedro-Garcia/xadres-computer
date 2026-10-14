@@ -19,7 +19,8 @@ import {
   type Profile,
   type RewardReport,
 } from '../meta/profile';
-import { MAX_HISTORY, buildSummary, isHistory, validateSaved, type HistoryEntry, type SavedGame } from '../meta/session';
+import { historyScreen } from './screens/history';
+import { MAX_HISTORY, buildHistoryEntry, type HistoryFilter, buildSummary, isHistory, validateSaved, type HistoryEntry, type SavedGame } from '../meta/session';
 import { sanitizeSettings, type Settings } from '../meta/settings';
 import { KEYS, defaultStore, readJson, writeJson, type KeyValueStore } from '../meta/storage';
 import { AiClient } from '../ai/client';
@@ -379,54 +380,26 @@ export class App {
     );
   }
 
+  private historyFilter: HistoryFilter = { outcome: 'all', difficulty: 'all' };
+
   private screen_history() {
-    const st = this.profile.stats;
-    const list = h('div', { class: 'history-list' });
-    if (!this.history.length) list.append(h('p', { class: 'muted' }, t('history.empty')));
-    for (const e of this.history) {
-      const moves = h('div', { class: 'hist-moves hidden' }, e.moves.join(' '));
-      list.append(
-        h(
-          'div',
-          { class: `hist ${e.outcome}` },
-          h(
-            'div',
-            { class: 'hist-row' },
-            h('strong', {}, t(`result.${e.outcome}`)),
-            h('span', {}, t(`result.${e.reason}`)),
-            h('span', {}, t(`difficulty.${e.difficulty}`)),
-            h('span', {}, t(`difficulty.${e.playerColor === 'w' ? 'white' : 'black'}`)),
-            h('span', {}, t('history.plies', { n: e.plies })),
-            h('span', { class: 'gold' }, `+${e.xp} XP · ◈${e.coins}`),
-            h('span', { class: 'muted' }, new Date(e.date).toLocaleString(getLang())),
-            h('button', { class: 'btn ghost small', onclick: () => moves.classList.toggle('hidden') }, t('history.moves')),
-          ),
-          moves,
-        ),
-      );
-    }
-    const levels = h('div', { class: 'level-log' }, this.profile.levelLog.map((l) => h('span', { class: 'chip' }, `${t('common.level')} ${l.level} · ${new Date(l.at).toLocaleDateString(getLang())}`)));
-    return h(
-      'div',
-      {},
-      this.header(t('history.title')),
-      h(
-        'div',
-        { class: 'panel content' },
-        h('p', {}, t('history.stats', { games: st.games, wins: st.wins, losses: st.losses, draws: st.draws })),
-        h('h3', {}, t('history.levels')),
-        levels,
-        list,
-        this.history.length
-          ? h('button', { class: 'btn ghost danger', onclick: async () => {
-              if (!(await this.confirm(t('history.clearConfirm')))) return;
-              this.history = [];
-              this.persist(KEYS.history, this.history);
-              this.show('history');
-            } }, t('history.clear'))
-          : '',
-      ),
-    );
+    return historyScreen({
+      header: this.header(t('history.title')),
+      history: this.history,
+      profile: this.profile,
+      filter: this.historyFilter,
+      host: this.ui,
+      onFilter: (f) => {
+        this.historyFilter = f;
+        this.show('history');
+      },
+      onClear: async () => {
+        if (!(await this.confirm(t('history.clearConfirm')))) return;
+        this.history = [];
+        this.persist(KEYS.history, this.history);
+        this.show('history');
+      },
+    });
   }
 
   private screen_tutorial() {
@@ -575,22 +548,7 @@ export class App {
     this.profile = profile;
     this.saveProfile();
     if (report.reason !== 'alreadyRewarded') {
-      this.history = [
-        {
-          gameId: summary.gameId,
-          date: summary.endedAt,
-          difficulty: summary.difficulty,
-          playerColor: summary.playerColor,
-          outcome: summary.outcome,
-          reason: summary.result.reason,
-          plies: summary.plies,
-          xp: report.xp,
-          coins: report.coins,
-          powers: summary.playerPowers.length,
-          moves: g.state.history.map((m) => m.notation),
-        },
-        ...this.history,
-      ].slice(0, MAX_HISTORY);
+      this.history = [buildHistoryEntry(g, summary, report), ...this.history].slice(0, MAX_HISTORY);
       this.persist(KEYS.history, this.history);
     }
     this.saveGame(null);
