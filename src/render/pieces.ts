@@ -121,17 +121,11 @@ export interface PieceMaterials {
   glowB: THREE.MeshBasicMaterial;
 }
 
-export function createPieceMaterials(skin: PieceSkinDef): PieceMaterials {
+/** `lite` usa MeshStandardMaterial (sem verniz), mais leve para aparelhos modestos. */
+export function createPieceMaterials(skin: PieceSkinDef, lite = false): PieceMaterials {
+  const base = { metalness: skin.metalness, roughness: skin.roughness, emissive: new THREE.Color(skin.glow), emissiveIntensity: 0 };
   const make = (color: number) =>
-    new THREE.MeshPhysicalMaterial({
-      color,
-      metalness: skin.metalness,
-      roughness: skin.roughness,
-      clearcoat: 0.6,
-      clearcoatRoughness: 0.2,
-      emissive: new THREE.Color(skin.glow),
-      emissiveIntensity: 0,
-    });
+    lite ? new THREE.MeshStandardMaterial({ color, ...base }) : new THREE.MeshPhysicalMaterial({ color, ...base, clearcoat: 0.6, clearcoatRoughness: 0.2 });
   return {
     w: make(skin.white),
     b: make(skin.black),

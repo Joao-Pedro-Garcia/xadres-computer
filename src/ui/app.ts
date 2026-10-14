@@ -22,7 +22,7 @@ import { defaultSettings, resolveQuality, sanitizeSettings, type Settings } from
 import { settingsScreen } from './screens/settings';
 import { KEYS, defaultStore, readJson, writeJson, type KeyValueStore } from '../meta/storage';
 import { AiClient } from '../ai/client';
-import { BoardView } from '../render/scene';
+import type { BoardView } from '../render/scene';
 import { START_FEN } from '../core/game';
 import { Audio } from './audio';
 import { clear, h, hex } from './dom';
@@ -68,14 +68,27 @@ export class App {
     }
   }
 
-  start() {
+  /** Carregamento progressivo: a interface aparece logo; o módulo 3D (Three.js) é baixado em seguida. */
+  async start() {
     const stage = h('div', { class: 'stage' });
     this.root.append(stage, this.ui);
-    if (!BoardView.supported()) {
-      this.screenEl.append(h('div', { class: 'panel center-card' }, h('h2', {}, t('app.title')), h('p', {}, t('app.webglError'))));
-      return;
+    const status = document.querySelector('#loading .loading-text');
+    if (status) status.textContent = t('app.loading');
+    let mod: typeof import('../render/scene');
+    try {
+      mod = await import('../render/scene');
+    } catch (err) {
+      console.error(err);
+      return this.fatal(t('app.loadError'), true);
     }
-    this.view = new BoardView(stage);
+    if (!mod.BoardView.supported()) return this.fatal(t('app.webglError'));
+    try {
+      this.view = new mod.BoardView(stage);
+    } catch (err) {
+      console.error(err);
+      return this.fatal(t('app.webglError'));
+    }
+    this.view.onContextChange = (lost) => this.toast(lost ? t('app.contextLost') : t('app.contextRestored'), lost ? 'error' : 'success');
     this.applyVisuals();
     this.view.syncPieces(START_FEN, true);
     this.view.setMode('menu');
@@ -87,6 +100,18 @@ export class App {
     document.getElementById('loading')?.remove();
     this.show('menu');
     this.offerTutorial();
+  }
+
+  private fatal(msg: string, retry = false) {
+    document.getElementById('loading')?.remove();
+    clear(this.screenEl);
+    this.screenEl.append(
+      h(
+        'div',
+        { class: 'screen' },
+        h('div', { class: 'panel content center-card', role: 'alert' }, h('h2', {}, t('app.title')), h('p', {}, msg), retry ? h('button', { class: 'btn primary', onclick: () => location.reload() }, t('app.retry')) : ''),
+      ),
+    );
   }
 
   /* ------------------------------ Persistência ------------------------------ */

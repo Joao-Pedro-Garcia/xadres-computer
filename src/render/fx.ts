@@ -55,9 +55,14 @@ export class Fx {
 
   constructor(private scene: THREE.Scene) {}
 
+  /** Teto de partículas simultâneas, para manter o desempenho em aparelhos modestos. */
+  static readonly MAX_PARTICLES = 2500;
+  private active = 0;
+
   burst(pos: THREE.Vector3, o: BurstOptions) {
-    const n = Math.round(o.count * this.density);
+    const n = Math.min(Math.round(o.count * this.density), Fx.MAX_PARTICLES - this.active);
     if (n <= 0) return;
+    this.active += n;
     const positions = new Float32Array(n * 3);
     const vel = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -201,7 +206,10 @@ export class Fx {
       pos.needsUpdate = true;
       (b.points.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - b.age / b.life);
     }
-    for (const b of this.bursts.filter((x) => x.age >= x.life)) this.dispose(b.points);
+    for (const b of this.bursts.filter((x) => x.age >= x.life)) {
+      this.active -= b.vel.length / 3;
+      this.dispose(b.points);
+    }
     this.bursts = this.bursts.filter((x) => x.age < x.life);
 
     for (const tr of this.transients) {
@@ -215,6 +223,7 @@ export class Fx {
   clear() {
     for (const b of this.bursts) this.dispose(b.points);
     for (const t of this.transients) this.dispose(t.obj);
+    this.active = 0;
     this.bursts = [];
     this.transients = [];
   }

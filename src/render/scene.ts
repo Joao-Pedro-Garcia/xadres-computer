@@ -111,6 +111,8 @@ export class BoardView {
   private running = false;
   private pointerDown: { x: number; y: number; t: number } | null = null;
   onSquareTap: (sq: Square | null) => void = () => {};
+  onContextChange: (lost: boolean) => void = () => {};
+  private contextLost = false;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -134,9 +136,23 @@ export class BoardView {
     this.controls.target.set(0, 0, 0);
     this.controls.addEventListener('change', () => this.clampTarget());
 
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.45;
+    this.buildEnvironment();
+    // Perda de contexto WebGL (comum em celulares ao trocar de app): pausa e recupera sem perder a partida.
+    const canvas = this.renderer.domElement;
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.contextLost = true;
+      this.stop();
+      this.onContextChange(true);
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      this.buildEnvironment();
+      this.keyLight.shadow.map?.dispose();
+      (this.keyLight.shadow as { map: unknown }).map = null;
+      this.start();
+      this.onContextChange(false);
+    });
 
     this.fx = new Fx(this.scene);
     this.pieceMats = createPieceMaterials({ id: 'x', white: 0xffffff, black: 0x111111, metalness: 0.1, roughness: 0.4, glow: 0x4f8dff });
@@ -151,6 +167,21 @@ export class BoardView {
       if (document.hidden) this.stop();
       else this.start();
     });
+  }
+
+  /** Reflexos de ambiente; se o aparelho não suportar, usa só a iluminação direta (alternativa leve). */
+  private buildEnvironment() {
+    try {
+      this.scene.environment?.dispose();
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem.dispose();
+      this.scene.environmentIntensity = 0.45;
+    } catch (err) {
+      console.warn('Reflexos indisponíveis; usando iluminação simples.', err);
+      this.scene.environment = null;
+      this.ambient.intensity = 1;
+    }
   }
 
   static supported(): boolean {
@@ -295,7 +326,7 @@ export class BoardView {
   }
 
   private buildCoordinates() {
-    this.coordGroup.clear();
+    BoardView.disposeGroup(this.coordGroup);
     if (!this.opts.coordinates) return;
     const make = (text: string) => {
       const c = document.createElement('canvas');
@@ -351,7 +382,9 @@ export class BoardView {
   }
 
   setSkin(skin: PieceSkinDef, fen?: string) {
-    this.pieceMats = createPieceMaterials(skin);
+    const old = this.pieceMats;
+    for (const m of [old.w, old.b, old.glowW, old.glowB]) m.dispose();
+    this.pieceMats = createPieceMaterials(skin, this.opts.quality === 'low');
     if (fen) this.syncPieces(fen, true);
   }
 
@@ -555,15 +588,46 @@ export class BoardView {
 
   /* ----------------------------- Destaques ----------------------------- */
 
-  private clearHighlights() {
-    this.hlGroup.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh) {
-        m.geometry.dispose();
-        (m.material as THREE.Material).dispose();
-      }
+  /** Geometrias de destaque compartilhadas: criadas uma vez e reutilizadas a cada lance. */
+  private static geoCache = new Map<string, THREE.BufferGeometry>();
+  private static geo(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+    let g = BoardView.geoCache.get(key);
+    if (!g) {
+      g = make();
+      BoardView.geoCache.set(key, g);
+    }
+    return g;
+  }
+  private static plane(size: number) {
+    return BoardView.geo(`plane:${size}`, () => new THREE.PlaneGeometry(size, size));
+  }
+  private static circle(r: number) {
+    return BoardView.geo(`circle:${r}`, () => new THREE.CircleGeometry(r, 32));
+  }
+  private static ring(inner: number, outer: number, seg: number, rot = 0) {
+    return BoardView.geo(`ring:${inner}:${outer}:${seg}:${rot}`, () => {
+      const g = new THREE.RingGeometry(inner, outer, seg);
+      if (rot) g.rotateZ(rot);
+      return g;
     });
-    this.hlGroup.clear();
+  }
+
+  /** Libera materiais/texturas de um grupo; geometrias compartilhadas do cache são mantidas. */
+  private static disposeGroup(group: THREE.Object3D) {
+    const cached = new Set(BoardView.geoCache.values());
+    group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      if (!cached.has(m.geometry)) m.geometry.dispose();
+      const mat = m.material as THREE.MeshBasicMaterial;
+      mat.map?.dispose();
+      mat.dispose();
+    });
+    group.clear();
+  }
+
+  private clearHighlights() {
+    BoardView.disposeGroup(this.hlGroup);
     this.pulseMats = [];
   }
 
@@ -582,22 +646,21 @@ export class BoardView {
   setHighlights(h: Highlights) {
     this.clearHighlights();
     if (h.lastMove) {
-      for (const s of [h.lastMove.from, h.lastMove.to]) this.hlGroup.add(this.overlay(s, new THREE.PlaneGeometry(0.96, 0.96), 0x2f6bff, 0.3));
+      for (const s of [h.lastMove.from, h.lastMove.to]) this.hlGroup.add(this.overlay(s, BoardView.plane(0.96), 0x2f6bff, 0.3));
     }
     if (h.check) {
-      this.hlGroup.add(this.overlay(h.check, new THREE.CircleGeometry(0.48, 40), 0xff3040, 0.6, 0.014, true, true));
+      this.hlGroup.add(this.overlay(h.check, BoardView.circle(0.48), 0xff3040, 0.6, 0.014, true, true));
     }
     if (h.selected) {
-      this.hlGroup.add(this.overlay(h.selected, new THREE.RingGeometry(0.4, 0.48, 40), 0xffd27a, 0.9, 0.016, true, true));
-      this.hlGroup.add(this.overlay(h.selected, new THREE.PlaneGeometry(0.96, 0.96), 0xffb030, 0.35));
+      this.hlGroup.add(this.overlay(h.selected, BoardView.ring(0.4, 0.48, 40), 0xffd27a, 0.9, 0.016, true, true));
+      this.hlGroup.add(this.overlay(h.selected, BoardView.plane(0.96), 0xffb030, 0.35));
     }
-    for (const s of h.moves ?? []) this.hlGroup.add(this.overlay(s, new THREE.CircleGeometry(0.14, 24), 0x1e8cff, 0.85, 0.016));
-    for (const s of h.captures ?? []) this.hlGroup.add(this.overlay(s, new THREE.RingGeometry(0.36, 0.46, 36), 0xff9a1a, 0.9, 0.016, true));
+    for (const s of h.moves ?? []) this.hlGroup.add(this.overlay(s, BoardView.circle(0.14), 0x1e8cff, 0.85, 0.016));
+    for (const s of h.captures ?? []) this.hlGroup.add(this.overlay(s, BoardView.ring(0.36, 0.46, 36), 0xff9a1a, 0.9, 0.016, true));
     for (const s of h.powerTargets ?? []) {
-      const ring = new THREE.RingGeometry(0.22, 0.34, 4);
-      ring.rotateZ(Math.PI / 4);
+      const ring = BoardView.ring(0.22, 0.34, 4, Math.PI / 4);
       this.hlGroup.add(this.overlay(s, ring, 0x8a4bff, 0.95, 0.017, true));
-      this.hlGroup.add(this.overlay(s, new THREE.PlaneGeometry(0.94, 0.94), 0x7a4bff, 0.28));
+      this.hlGroup.add(this.overlay(s, BoardView.plane(0.94), 0x7a4bff, 0.28));
     }
     // Brilho da peça selecionada.
     if (this.selected) this.selected.userData.material.emissiveIntensity = 0;
@@ -606,20 +669,13 @@ export class BoardView {
   }
 
   setEffects(e: EffectsView | null) {
-    this.effectGroup.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh) {
-        m.geometry.dispose();
-        (m.material as THREE.Material).dispose();
-      }
-    });
-    this.effectGroup.clear();
+    BoardView.disposeGroup(this.effectGroup);
     if (!e) return;
     for (const z of e.zones) {
       const mine = z.owner === e.viewer;
       const color = mine ? 0x4fd0ff : 0xff5a8a;
       for (const s of z.squares) {
-        const tile = this.overlay(s, new THREE.PlaneGeometry(0.9, 0.9), color, 0.12, 0.011);
+        const tile = this.overlay(s, BoardView.plane(0.9), color, 0.12, 0.011);
         this.effectGroup.add(tile);
         if (z.kind === 'wall') {
           const pillar = new THREE.Mesh(
@@ -641,10 +697,10 @@ export class BoardView {
       }
     }
     if (e.vision) {
-      for (const s of e.vision.danger) this.effectGroup.add(this.overlay(s, new THREE.PlaneGeometry(0.92, 0.92), 0xff4040, 0.16, 0.013));
-      for (const s of e.vision.safe) this.effectGroup.add(this.overlay(s, new THREE.PlaneGeometry(0.92, 0.92), 0x40ff9a, 0.1, 0.013));
-      for (const s of e.vision.threatened) this.effectGroup.add(this.overlay(s, new THREE.RingGeometry(0.38, 0.47, 6), 0xff8a2a, 0.95, 0.018));
-      for (const s of e.vision.attackers) this.effectGroup.add(this.overlay(s, new THREE.RingGeometry(0.3, 0.38, 3), 0xff3030, 0.95, 0.018));
+      for (const s of e.vision.danger) this.effectGroup.add(this.overlay(s, BoardView.plane(0.92), 0xff4040, 0.16, 0.013));
+      for (const s of e.vision.safe) this.effectGroup.add(this.overlay(s, BoardView.plane(0.92), 0x40ff9a, 0.1, 0.013));
+      for (const s of e.vision.threatened) this.effectGroup.add(this.overlay(s, BoardView.ring(0.38, 0.47, 6), 0xff8a2a, 0.95, 0.018));
+      for (const s of e.vision.attackers) this.effectGroup.add(this.overlay(s, BoardView.ring(0.3, 0.38, 3), 0xff3030, 0.95, 0.018));
     }
   }
 
@@ -924,7 +980,7 @@ export class BoardView {
   }
 
   start() {
-    if (this.running) return;
+    if (this.running || this.contextLost) return;
     this.running = true;
     this.clock.update();
     const loop = () => {

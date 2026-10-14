@@ -45,7 +45,7 @@ button { font: inherit; color: inherit; }
 /* ---------- Carregamento ---------- */
 .loading { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; background: radial-gradient(circle at 50% 40%, #121a33, var(--bg) 70%); z-index: 10; }
 .loading-mark { font-size: 64px; color: var(--gold); text-shadow: 0 0 24px rgba(255, 210, 122, 0.6); animation: pulse 1.6s infinite; }
-.loading-text { font-family: var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
+.loading-title { font-family: var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
 .loading-bar { width: 180px; height: 3px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; }
 .loading-bar span { display: block; width: 40%; height: 100%; background: linear-gradient(90deg, var(--blue), var(--gold)); animation: load 1.2s ease-in-out infinite; }
 @keyframes load { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
@@ -361,3 +361,4 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
   .tutorial-card .btn { padding: 6px 10px; }
 }
 @media (max-width: 760px) { .hud.practice .sidebar, .hud.practice .hud-status { display: none; } }
+.loading-text { color: var(--muted); font-size: 13px; }
