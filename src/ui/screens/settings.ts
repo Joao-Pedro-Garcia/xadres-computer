@@ -32,7 +32,7 @@ export function settingsScreen(ctx: SettingsScreenCtx): HTMLElement {
       h('span', {}),
       h('em', { class: 'toggle-text' }, s[key] ? t('common.on') : t('common.off')),
     );
-  const slider = (key: 'masterVolume' | 'sfxVolume' | 'animationSpeed' | 'cameraSensitivity', min: number, max: number, step: number, fmt: (v: number) => string, label: string) => {
+  const slider = (key: 'masterVolume' | 'sfxVolume' | 'musicVolume' | 'animationSpeed' | 'cameraSensitivity', min: number, max: number, step: number, fmt: (v: number) => string, label: string) => {
     const out = h('output', { class: 'slider-value' }, fmt(s[key]));
     const input = h('input', { type: 'range', min, max, step, value: s[key], 'aria-label': label }) as HTMLInputElement;
     input.addEventListener('input', () => (out.textContent = fmt(Number(input.value))));
@@ -73,6 +73,8 @@ export function settingsScreen(ctx: SettingsScreenCtx): HTMLElement {
       row(t('settings.sound'), toggle('sound', t('settings.sound'))),
       row(t('settings.masterVolume'), slider('masterVolume', 0, 1, 0.05, pct, t('settings.masterVolume'))),
       row(t('settings.sfxVolume'), slider('sfxVolume', 0, 1, 0.05, pct, t('settings.sfxVolume'))),
+      row(t('settings.music'), toggle('music', t('settings.music')), t('settings.musicHint')),
+      row(t('settings.musicVolume'), slider('musicVolume', 0, 1, 0.05, pct, t('settings.musicVolume'))),
 
       h('h3', {}, t('settings.accessibility')),
       row(t('settings.highContrast'), toggle('highContrast', t('settings.highContrast')), t('settings.highContrastHint')),

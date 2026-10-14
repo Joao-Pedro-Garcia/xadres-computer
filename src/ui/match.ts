@@ -31,6 +31,7 @@ export interface MatchHost {
   onFinished: (g: SavedGame) => void;
   onExit: () => void;
   openSettings: () => void;
+  toggleMusic: () => void;
   /** Modo prática (tutorial): sem IA, sem salvamento e sem recompensas. */
   practice?: boolean;
   /** Chamado após cada ação válida do jogador (usado pelo tutorial para verificar objetivos). */
@@ -138,11 +139,22 @@ export class Match {
       h('button', { class: 'btn ghost', onclick: () => this.host.view.resetCamera() }, '⟲ ', t('game.resetCamera')),
       h('button', { class: 'btn ghost', onclick: () => this.flip() }, '⇅ ', t('game.flip')),
       h('button', { class: 'btn ghost', onclick: () => this.host.openSettings() }, '⚙ ', t('menu.settings')),
+      this.musicButton(),
       practice ? '' : h('button', { class: 'btn ghost danger', onclick: () => void this.resign() }, '⚑ ', t('game.resign')),
     );
     this.root.append(top, status, actions, sidebar, powerPanel, skip);
     this.els = { top, status, powerPanel, moves, effects, skip, undo, sidebar };
     window.addEventListener('keydown', this.onKey);
+  }
+
+  private musicButton(): HTMLButtonElement {
+    const on = this.host.settings().music;
+    const btn = h('button', { class: `btn ghost music-btn ${on ? '' : 'off'}`, 'aria-pressed': String(on) }, '♫ ', on ? t('settings.musicOn') : t('settings.musicOff')) as HTMLButtonElement;
+    btn.addEventListener('click', () => {
+      this.host.toggleMusic();
+      btn.replaceWith(this.musicButton());
+    });
+    return btn;
   }
 
   private onKey = (e: KeyboardEvent) => {

@@ -160,3 +160,28 @@ test('tutorial: oferta no primeiro acesso e exercício prático', async ({ page 
   await page.locator('.menu').waitFor();
   await expect(page.locator('.modal')).toHaveCount(0);
 });
+
+test('música: desligar, ajustar volume e manter após recarregar', async ({ page }) => {
+  await boot(page);
+  const playing = () => page.evaluate(() => (window as unknown as { __arcane: { musicPlaying: () => boolean } }).__arcane.musicPlaying());
+  const btn = page.locator('.menu-footer .music-btn');
+  await expect(btn).toHaveText('♫ Música: ligada');
+  // O navegador só libera áudio após um gesto do usuário.
+  expect(await playing()).toBe(false);
+  await page.mouse.click(300, 300);
+  await expect.poll(playing).toBe(true);
+  await btn.click();
+  await expect(page.locator('.menu-footer .music-btn')).toHaveText('♫ Música: desligada');
+  await expect.poll(playing).toBe(false);
+  await page.locator('.menu-item', { hasText: 'Configurações' }).click();
+  await expect(page.locator('.setting', { hasText: 'Música' }).first().locator('.toggle')).toHaveAttribute('aria-checked', 'false');
+  const vol = page.getByLabel('Volume da música');
+  await vol.fill('0.2');
+  await vol.dispatchEvent('change');
+  await page.reload();
+  await page.locator('.menu').waitFor();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arcane.settings.v1')!));
+  expect(saved.music).toBe(false);
+  expect(saved.musicVolume).toBeCloseTo(0.2);
+  await expect(page.locator('.menu-footer .music-btn')).toHaveText('♫ Música: desligada');
+});

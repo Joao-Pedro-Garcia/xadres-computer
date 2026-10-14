@@ -25,6 +25,7 @@ import { AiClient } from '../ai/client';
 import type { BoardView } from '../render/scene';
 import { START_FEN } from '../core/game';
 import { Audio } from './audio';
+import { Music } from './music';
 import { clear, h, hex } from './dom';
 import { Match } from './match';
 import { Tutorial } from './tutorial';
@@ -40,6 +41,7 @@ export class App {
   private view!: BoardView;
   private ai = new AiClient();
   private audio = new Audio();
+  private music = new Music();
   private ui: HTMLElement;
   private screenEl: HTMLElement;
   private hudLayer: HTMLElement;
@@ -99,6 +101,7 @@ export class App {
         project: (x: number, z: number) => this.view.project(x, z),
         camera: () => this.view.camera.position.toArray(),
         canvasSize: () => [this.view.renderer.domElement.clientWidth, this.view.renderer.domElement.clientHeight],
+        musicPlaying: () => this.music.isPlaying,
       };
     }
     this.applySettings();
@@ -259,6 +262,7 @@ export class App {
       h(
         'div',
         { class: 'menu-footer' },
+        this.musicButton(),
         h('div', { class: 'profile-chip big' }, h('span', { class: 'lvl' }, `${t('common.level')} ${li.level}`), h('span', { class: 'xpbar' }, h('span', { style: `width:${(li.into / li.needed) * 100}%` })), h('span', { class: 'muted' }, `${li.into}/${li.needed} XP`), h('span', { class: 'coins' }, `◈ ${this.profile.coins}`)),
       ),
     );
@@ -468,6 +472,7 @@ export class App {
         toast: (m, k) => this.toast(m, k),
         confirm: (m) => this.confirm(m),
         openSettings: () => this.show('settings'),
+        toggleMusic: () => this.toggleMusic(),
       },
       layer: this.hudLayer,
       onExit: (open) => {
@@ -534,6 +539,23 @@ export class App {
     });
   }
 
+  /** Botão rápido para ligar/desligar a música (o volume fica nas Configurações). */
+  private musicButton() {
+    const on = this.settings.music;
+    return h(
+      'button',
+      { class: `btn ghost music-btn ${on ? '' : 'off'}`, 'aria-pressed': String(on), onclick: () => this.toggleMusic() },
+      '♫ ',
+      on ? t('settings.musicOn') : t('settings.musicOff'),
+    );
+  }
+
+  private toggleMusic() {
+    this.settings = sanitizeSettings({ ...this.settings, music: !this.settings.music });
+    this.applySettings();
+    if (!this.match && !this.tutorial) this.show('menu');
+  }
+
   /** Aplica uma alteração de configuração imediatamente e salva no dispositivo. */
   updateSettings(patch: Partial<Settings>) {
     const before = this.settings;
@@ -550,6 +572,7 @@ export class App {
     setLang(this.settings.lang);
     this.audio.enabled = this.settings.sound;
     this.audio.volume = this.settings.masterVolume * this.settings.sfxVolume;
+    this.music.configure(this.settings.music, this.settings.masterVolume * this.settings.musicVolume);
     const root = document.documentElement.classList;
     root.toggle('high-contrast', this.settings.highContrast);
     root.toggle('large-text', this.settings.largeText);
@@ -595,6 +618,7 @@ export class App {
         onFinished: (x) => this.finish(x),
         onExit: () => this.exitMatch(),
         openSettings: () => this.show('settings'),
+        toggleMusic: () => this.toggleMusic(),
       },
       g,
       this.hudLayer,

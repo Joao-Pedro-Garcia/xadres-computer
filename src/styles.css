@@ -364,3 +364,6 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
 }
 @media (max-width: 760px) { .hud.practice .sidebar, .hud.practice .hud-status { display: none; } }
 .loading-text { color: var(--muted); font-size: 13px; }
+
+.menu-footer { gap: 10px; align-items: center; flex-wrap: wrap; }
+.music-btn.off { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }

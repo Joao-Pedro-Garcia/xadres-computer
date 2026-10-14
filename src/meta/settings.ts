@@ -31,6 +31,9 @@ export interface Settings {
   sound: boolean;
   masterVolume: number;
   sfxVolume: number;
+  /** Música ambiente ligada. */
+  music: boolean;
+  musicVolume: number;
   /* Acessibilidade */
   highContrast: boolean;
   largeText: boolean;
@@ -62,6 +65,8 @@ export function defaultSettings(): Settings {
     sound: true,
     masterVolume: 0.8,
     sfxVolume: 0.8,
+    music: true,
+    musicVolume: 0.5,
     highContrast: false,
     largeText: false,
   };
@@ -95,7 +100,8 @@ export function sanitizeSettings(v: unknown): Settings {
   s.cameraSensitivity = clamp(s.cameraSensitivity, 0.3, 2, d.cameraSensitivity);
   s.masterVolume = clamp(s.masterVolume, 0, 1, d.masterVolume);
   s.sfxVolume = clamp(s.sfxVolume, 0, 1, d.sfxVolume);
-  for (const k of ['shadows', 'coordinates', 'reduceMotion', 'cameraMotion', 'flipView', 'allowUndo', 'sound', 'highContrast', 'largeText'] as const) {
+  s.musicVolume = clamp(s.musicVolume, 0, 1, d.musicVolume);
+  for (const k of ['shadows', 'coordinates', 'reduceMotion', 'cameraMotion', 'flipView', 'allowUndo', 'sound', 'music', 'highContrast', 'largeText'] as const) {
     if (typeof s[k] !== 'boolean') s[k] = d[k];
   }
   delete (s as Record<string, unknown>).volume;

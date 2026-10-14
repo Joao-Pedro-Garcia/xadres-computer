@@ -132,9 +132,13 @@ O build de produção inclui manifesto e *service worker*: no Chrome do celular,
 - **Câmera**: arrastar (1 dedo / botão esquerdo) gira; pinça / roda faz zoom; 2 dedos / botão direito desloca. Limites de zoom, ângulo e deslocamento impedem perder o tabuleiro. Botão "Restaurar câmera".
 - **Esc**: pula a animação ou cancela a seleção.
 
+## Música
+
+Trilha ambiente calma gerada pelo próprio jogo com WebAudio (`src/ui/music.ts`): acordes suaves em lá menor, baixo grave e notas esparsas com eco — sem arquivos de áudio externos. Começa após o primeiro toque/clique (exigência dos navegadores), pausa quando a aba fica em segundo plano e pode ser desligada pelo botão **♫ Música** no menu e na partida, ou ajustada em Configurações → Áudio (volume da música, multiplicado pelo volume geral).
+
 ## Configurações
 
-Idioma, qualidade (automática/baixa/média/alta — a automática escolhe pelo aparelho e reduz a resolução se o FPS cair), sombras, partículas, coordenadas, animações (completas/pular), velocidade das animações, reduzir movimento, movimentos de câmera, sensibilidade da câmera, controle de toque (1 dedo gira ou 2 dedos giram), inverter perspectiva, permitir desfazer, som, volume geral, volume dos efeitos, alto contraste, texto grande e **restaurar padrões**. Tudo é aplicado na hora, salvo automaticamente e pode ser alterado durante a partida (botão ⚙) sem reiniciá-la.
+Idioma, qualidade (automática/baixa/média/alta — a automática escolhe pelo aparelho e reduz a resolução se o FPS cair), sombras, partículas, coordenadas, animações (completas/pular), velocidade das animações, reduzir movimento, movimentos de câmera, sensibilidade da câmera, controle de toque (1 dedo gira ou 2 dedos giram), inverter perspectiva, permitir desfazer, som, volume geral, volume dos efeitos, música (liga/desliga) e volume da música, alto contraste, texto grande e **restaurar padrões**. Tudo é aplicado na hora, salvo automaticamente e pode ser alterado durante a partida (botão ⚙) sem reiniciá-la.
 
 ## Tutorial
 
@@ -156,7 +160,7 @@ Cada partida concluída guarda: data/hora, resultado e motivo, cor, dificuldade,
 ## Limitações conhecidas
 
 - Sem multijogador (local ou online) e sem contas: só jogador × IA.
-- Sem música; os efeitos sonoros são sintetizados e simples.
+- Música e efeitos são sintetizados em tempo real (sem gravações); a trilha é uma só, calma e contínua.
 - A IA considera os poderes do adversário apenas como ameaça de um lance (não dentro de toda a árvore de busca).
 - Peças são modelos procedurais estilizados (sem modelos esculpidos externos).
 - Balanceamento ainda baseado em poucas simulações (`npm run simulate`).
