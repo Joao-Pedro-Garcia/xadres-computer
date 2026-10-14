@@ -338,3 +338,26 @@ input[type='range'] { accent-color: var(--gold); width: 180px; }
   .btn, .seg-btn, .menu-item, .toggle { min-height: 44px; }
   .hud-actions .btn { min-height: 42px; }
 }
+
+/* ---------- Tutorial ---------- */
+.tutorial-card { pointer-events: auto; position: absolute; z-index: 5; padding: 16px; width: min(420px, calc(100vw - 20px)); }
+.tutorial-card.exercise { left: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 140px); }
+.tutorial-card.info, .tutorial-card.menus { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 24px)); }
+.tutorial-card h3 { font-family: var(--display); color: var(--gold); margin: 8px 0 6px; font-size: 20px; }
+.tut-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tut-body { color: #d8deea; margin: 0 0 10px; }
+.tut-task { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-blue); background: rgba(95, 200, 255, 0.08); }
+.tut-task strong { color: var(--blue); }
+.tut-task.done { border-color: rgba(95, 224, 160, 0.6); background: rgba(95, 224, 160, 0.1); }
+.tut-task.done strong { color: var(--success); }
+.tut-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.tut-nav { margin-top: 12px; }
+.dots span.ok { background: var(--success); }
+@media (max-width: 760px) {
+  .tutorial-card.exercise { left: 6px; right: 6px; width: auto; top: calc(max(8px, env(safe-area-inset-top)) + 84px); padding: 10px 12px; }
+  .tutorial-card.exercise .tut-body { display: none; }
+  .tutorial-card.exercise h3 { font-size: 16px; margin: 4px 0; }
+  .tutorial-card .dots { display: none; }
+  .tutorial-card .btn { padding: 6px 10px; }
+}
+@media (max-width: 760px) { .hud.practice .sidebar, .hud.practice .hud-status { display: none; } }

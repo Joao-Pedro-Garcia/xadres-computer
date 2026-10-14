@@ -27,6 +27,8 @@ export interface Profile {
   stats: Stats;
   rewardedGames: string[];
   levelLog: { level: number; at: number }[];
+  /** O tutorial já foi oferecido/iniciado (para não oferecer de novo). */
+  tutorialSeen: boolean;
 }
 
 export function newProfile(): Profile {
@@ -53,6 +55,7 @@ export function newProfile(): Profile {
     },
     rewardedGames: [],
     levelLog: [{ level: 1, at: Date.now() }],
+    tutorialSeen: false,
   };
 }
 

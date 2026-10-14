@@ -31,6 +31,10 @@ export interface MatchHost {
   onFinished: (g: SavedGame) => void;
   onExit: () => void;
   openSettings: () => void;
+  /** Modo prática (tutorial): sem IA, sem salvamento e sem recompensas. */
+  practice?: boolean;
+  /** Chamado após cada ação válida do jogador (usado pelo tutorial para verificar objetivos). */
+  onPlayerAction?: (ctx: { before: GameState; after: GameState; action: Action; events: GameEvent[]; endsTurn: boolean }) => void;
 }
 
 interface Selection {
@@ -46,6 +50,7 @@ export class Match {
   private busy = false;
   private aiThinking = false;
   private disposed = false;
+  private locked = false;
   /** Inversão temporária pelo botão do HUD (somada à configuração salva). */
   private flipped = false;
   private turnStart: GameState;
@@ -67,7 +72,7 @@ export class Match {
     container: HTMLElement,
   ) {
     this.turnStart = g.state;
-    this.root = h('div', { class: 'hud' });
+    this.root = h('div', { class: `hud ${host.practice ? 'practice' : ''}` });
     container.append(this.root);
     this.buildHud();
     const v = host.view;
@@ -77,7 +82,7 @@ export class Match {
     v.syncPieces(g.state.fen, true);
     v.onSquareTap = (sq) => this.onTap(sq);
     this.refresh();
-    if (sideToMove(g.state) !== g.playerColor && !g.state.result) void this.runAi();
+    if (!host.practice && sideToMove(g.state) !== g.playerColor && !g.state.result) void this.runAi();
   }
 
   private get state() {
@@ -87,6 +92,13 @@ export class Match {
   private viewColor(): Color {
     const s = this.host.settings();
     return s.flipView !== this.flipped ? opposite(this.g.playerColor) : this.g.playerColor;
+  }
+
+  /** Bloqueia novas ações do jogador (ex.: exercício concluído). */
+  lock() {
+    this.locked = true;
+    this.sel = null;
+    this.refresh();
   }
 
   dispose() {
@@ -116,15 +128,17 @@ export class Match {
       h('button', { class: 'sidebar-toggle', onclick: () => sidebar.classList.toggle('collapsed'), 'aria-label': t('game.moves') }, '☰ ', t('game.moves')),
       h('div', { class: 'sidebar-body' }, effects, moves),
     );
+    const practice = !!this.host.practice;
+    if (practice) undo.classList.add('hidden');
     const actions = h(
       'div',
       { class: 'hud-actions' },
-      h('button', { class: 'btn ghost', onclick: () => void this.leave() }, '☰ ', t('game.menu')),
+      practice ? '' : h('button', { class: 'btn ghost', onclick: () => void this.leave() }, '☰ ', t('game.menu')),
       undo,
       h('button', { class: 'btn ghost', onclick: () => this.host.view.resetCamera() }, '⟲ ', t('game.resetCamera')),
       h('button', { class: 'btn ghost', onclick: () => this.flip() }, '⇅ ', t('game.flip')),
       h('button', { class: 'btn ghost', onclick: () => this.host.openSettings() }, '⚙ ', t('menu.settings')),
-      h('button', { class: 'btn ghost danger', onclick: () => void this.resign() }, '⚑ ', t('game.resign')),
+      practice ? '' : h('button', { class: 'btn ghost danger', onclick: () => void this.resign() }, '⚑ ', t('game.resign')),
     );
     this.root.append(top, status, actions, sidebar, powerPanel, skip);
     this.els = { top, status, powerPanel, moves, effects, skip, undo, sidebar };
@@ -282,7 +296,7 @@ export class Match {
   /* ------------------------------- Entrada ------------------------------- */
 
   private canInput() {
-    return !this.busy && !this.aiThinking && !this.state.result && sideToMove(this.state) === this.g.playerColor;
+    return !this.locked && !this.busy && !this.aiThinking && !this.state.result && sideToMove(this.state) === this.g.playerColor;
   }
 
   private onTap(sq: Square | null) {
@@ -385,7 +399,9 @@ export class Match {
     this.host.save(this.g);
     await this.present(r.events, r.state.fen);
     if (this.disposed) return;
-    if (endsTurn) this.afterTurn();
+    this.host.onPlayerAction?.({ before, after: r.state, action, events: r.events, endsTurn });
+    if (this.disposed) return;
+    if (endsTurn && !this.host.practice) this.afterTurn();
     else this.refresh();
   }
 

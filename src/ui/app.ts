@@ -1,9 +1,6 @@
 import { createGame } from '../core/game';
 import type { Color, Difficulty } from '../core/types';
-import { POWERS } from '../core/balance';
 import { getLang, setLang, t } from '../i18n';
-import { ptBR } from '../i18n/pt-BR';
-import { en } from '../i18n/en';
 import { CAPTURE_FX, CATALOG, PIECE_SKINS, THEMES, TRAILS, type CatalogItem, type ItemCategory } from '../meta/catalog';
 import {
   ACHIEVEMENTS,
@@ -30,6 +27,7 @@ import { START_FEN } from '../core/game';
 import { Audio } from './audio';
 import { clear, h, hex } from './dom';
 import { Match } from './match';
+import { Tutorial } from './tutorial';
 
 type Screen = 'menu' | 'newGame' | 'shop' | 'achievements' | 'history' | 'tutorial' | 'settings' | 'credits' | 'game';
 
@@ -48,7 +46,7 @@ export class App {
   private toasts: HTMLElement;
   private match: Match | null = null;
   private shopTab: ItemCategory = 'theme';
-  private tutorialStep = 0;
+  private tutorial: Tutorial | null = null;
   private previewTheme: string | null = null;
 
   constructor(private root: HTMLElement) {
@@ -88,6 +86,7 @@ export class App {
     this.applySettings();
     document.getElementById('loading')?.remove();
     this.show('menu');
+    this.offerTutorial();
   }
 
   /* ------------------------------ Persistência ------------------------------ */
@@ -169,7 +168,7 @@ export class App {
   }
 
   private header(title: string, back: Screen = 'menu') {
-    if (this.match && back === 'menu') back = 'game';
+    if ((this.match || this.tutorial) && back === 'menu') back = 'game';
     return h(
       'div',
       { class: 'screen-header' },
@@ -223,7 +222,7 @@ export class App {
         item(t('menu.themes'), () => ((this.shopTab = 'theme'), this.show('shop'))),
         item(t('menu.achievements'), () => this.show('achievements')),
         item(t('menu.history'), () => this.show('history')),
-        item(t('menu.tutorial'), () => ((this.tutorialStep = 0), this.show('tutorial'))),
+        item(t('menu.tutorial'), () => this.show('tutorial')),
         item(t('menu.settings'), () => this.show('settings')),
         item(t('menu.credits'), () => this.show('credits')),
       ),
@@ -420,46 +419,68 @@ export class App {
     });
   }
 
+  /** O tutorial não é uma tela comum: roda sobre o tabuleiro 3D. */
   private screen_tutorial() {
-    const steps = (getLang() === 'en' ? en : ptBR).tutorial.steps;
-    const i = Math.max(0, Math.min(steps.length - 1, this.tutorialStep));
-    const step = steps[i];
-    const go = (n: number) => {
-      this.tutorialStep = n;
-      this.show('tutorial');
+    queueMicrotask(() => this.startTutorial());
+    return h('div', {});
+  }
+
+  private startTutorial() {
+    clear(this.screenEl);
+    this.markTutorialSeen();
+    this.tutorial?.dispose();
+    this.tutorial = new Tutorial({
+      base: {
+        view: this.view,
+        ai: this.ai,
+        audio: this.audio,
+        settings: () => this.settings,
+        toast: (m, k) => this.toast(m, k),
+        confirm: (m) => this.confirm(m),
+        openSettings: () => this.show('settings'),
+      },
+      layer: this.hudLayer,
+      onExit: (open) => {
+        this.tutorial = null;
+        this.view.setMode('menu');
+        this.view.syncPieces(START_FEN);
+        this.show(open ?? 'menu');
+      },
+    });
+  }
+
+  private markTutorialSeen() {
+    if (this.profile.tutorialSeen) return;
+    this.profile = { ...this.profile, tutorialSeen: true };
+    this.saveProfile();
+  }
+
+  /** No primeiro acesso, oferece o tutorial (pode ser pulado e aberto depois pelo menu). */
+  private offerTutorial() {
+    if (this.profile.tutorialSeen || this.saved || this.profile.stats.games > 0) return;
+    const overlay = h('div', { class: 'modal-backdrop' });
+    const close = (start: boolean) => {
+      overlay.remove();
+      this.markTutorialSeen();
+      if (start) this.show('tutorial');
     };
-    return h(
-      'div',
-      {},
-      this.header(t('tutorial.title')),
+    overlay.append(
       h(
         'div',
-        { class: 'panel content tutorial' },
-        h('div', { class: 'dots' }, steps.map((_, k) => h('span', { class: k === i ? 'on' : '' }))),
-        h('h3', {}, step.title),
-        h('p', {}, step.body),
-        i === 3 || i === 4
-          ? h(
-              'table',
-              { class: 'power-table' },
-              h('tbody', {}, Object.values(POWERS).filter((p) => (i === 3 ? p.endsTurn : !p.endsTurn)).map((p) => h('tr', {}, h('td', {}, t(`pieces.${p.piece}`)), h('td', {}, t(`powers.${p.id}.name`)), h('td', { class: 'gold' }, `⚡${p.cost}`)))),
-            )
-          : '',
-        h(
-          'div',
-          { class: 'modal-actions' },
-          h('button', { class: 'btn ghost', disabled: i === 0, onclick: () => go(i - 1) }, t('common.prev')),
-          i < steps.length - 1 ? h('button', { class: 'btn primary', onclick: () => go(i + 1) }, t('common.next')) : h('button', { class: 'btn primary', onclick: () => this.show('newGame') }, t('tutorial.start')),
-        ),
+        { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
+        h('h3', {}, t('tutorial.offerTitle')),
+        h('p', {}, t('tutorial.offerBody')),
+        h('div', { class: 'modal-actions' }, h('button', { class: 'btn ghost', onclick: () => close(false) }, t('tutorial.offerSkip')), h('button', { class: 'btn primary', onclick: () => close(true) }, t('tutorial.offerStart'))),
       ),
     );
+    this.ui.append(overlay);
   }
 
   private screen_settings() {
     return settingsScreen({
-      header: this.header(t('settings.title'), this.match ? 'game' : 'menu'),
+      header: this.header(t('settings.title'), this.match || this.tutorial ? 'game' : 'menu'),
       settings: this.settings,
-      inMatch: !!this.match,
+      inMatch: !!this.match || !!this.tutorial,
       update: (patch) => this.updateSettings(patch),
       restoreDefaults: async () => {
         if (!(await this.confirm(t('settings.restoreConfirm')))) return;
@@ -505,6 +526,7 @@ export class App {
     root.toggle('reduce-motion', this.settings.reduceMotion);
     if (this.view) this.applyVisuals();
     this.match?.relabel();
+    this.tutorial?.relabel();
   }
 
   private screen_credits() {
