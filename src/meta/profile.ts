@@ -13,6 +13,8 @@ export interface Stats {
   promotions: number;
   winStreak: number;
   bestStreak: number;
+  /** Quantas vezes cada desafio de partida foi concluído. */
+  challengesDone: Record<string, number>;
 }
 
 export interface Profile {
@@ -47,6 +49,7 @@ export function newProfile(): Profile {
       promotions: 0,
       winStreak: 0,
       bestStreak: 0,
+      challengesDone: {},
     },
     rewardedGames: [],
     levelLog: [{ level: 1, at: Date.now() }],
@@ -60,7 +63,12 @@ export function migrateProfile(v: Profile): Profile {
     ...base,
     ...v,
     equipped: { ...base.equipped, ...v.equipped },
-    stats: { ...base.stats, ...v.stats, winsByDifficulty: { ...base.stats.winsByDifficulty, ...v.stats?.winsByDifficulty } },
+    stats: {
+      ...base.stats,
+      ...v.stats,
+      winsByDifficulty: { ...base.stats.winsByDifficulty, ...v.stats?.winsByDifficulty },
+      challengesDone: { ...v.stats?.challengesDone },
+    },
   };
 }
 
@@ -92,31 +100,41 @@ export interface AchievementDef {
   id: string;
   xp: number;
   coins: number;
-  check: (p: Profile, m?: MatchSummary) => boolean;
+  /** Progresso atual/alvo; a conquista é concluída quando current >= target. */
+  progress: (p: Profile, m?: MatchSummary) => { current: number; target: number };
+  /** Ícone curto exibido junto ao estado (não depende só de cor). */
+  icon: string;
 }
 
-const ALL_POWERS: PowerId[] = ['royalShield', 'arcaneStep', 'wall', 'mysticVision', 'phantomLeap', 'surge'];
+export const ALL_POWERS: PowerId[] = ['royalShield', 'arcaneStep', 'wall', 'mysticVision', 'phantomLeap', 'surge'];
+
+const n = (current: number, target: number) => ({ current: Math.min(current, target), target });
+/** Conquistas de evento único dentro de uma partida (não acumulam). */
+const once = (cond: (m: MatchSummary) => boolean) => (_p: Profile, m?: MatchSummary) => n(m && cond(m) ? 1 : 0, 1);
 
 export const ACHIEVEMENTS: AchievementDef[] = [
-  { id: 'firstGame', xp: 20, coins: 20, check: (p) => p.stats.games >= 1 },
-  { id: 'firstWin', xp: 40, coins: 40, check: (p) => p.stats.wins >= 1 },
-  { id: 'firstCheckmate', xp: 50, coins: 50, check: (p) => p.stats.checkmates >= 1 },
-  { id: 'winMedium', xp: 60, coins: 60, check: (p) => p.stats.winsByDifficulty.medium >= 1 },
-  { id: 'winHard', xp: 100, coins: 100, check: (p) => p.stats.winsByDifficulty.hard >= 1 },
-  { id: 'winMaster', xp: 200, coins: 200, check: (p) => p.stats.winsByDifficulty.master >= 1 },
-  { id: 'firstPower', xp: 15, coins: 15, check: (p) => Object.values(p.stats.powersUsed).some((n) => (n ?? 0) > 0) },
-  { id: 'powerAdept', xp: 80, coins: 80, check: (p) => ALL_POWERS.every((k) => (p.stats.powersUsed[k] ?? 0) > 0) },
-  { id: 'purist', xp: 60, coins: 60, check: (_p, m) => !!m && m.outcome === 'win' && m.playerPowers.length === 0 },
-  { id: 'tenWins', xp: 150, coins: 150, check: (p) => p.stats.wins >= 10 },
-  { id: 'veteran', xp: 100, coins: 100, check: (p) => p.stats.games >= 25 },
-  { id: 'level5', xp: 0, coins: 150, check: (p) => levelInfo(p.xp).level >= 5 },
-  { id: 'collector', xp: 80, coins: 0, check: (p) => p.owned.length >= 8 },
-  { id: 'winAsBlack', xp: 50, coins: 40, check: (_p, m) => !!m && m.outcome === 'win' && m.playerColor === 'b' },
-  { id: 'arcaneMate', xp: 120, coins: 100, check: (_p, m) => !!m && m.outcome === 'win' && m.arcaneMate },
-  { id: 'grandArcanist', xp: 150, coins: 120, check: (_p, m) => !!m && m.outcome === 'win' && ALL_POWERS.every((k) => m.playerPowers.includes(k)) },
-  { id: 'firstPromotion', xp: 30, coins: 25, check: (p) => p.stats.promotions >= 1 },
-  { id: 'streak3', xp: 120, coins: 100, check: (p) => p.stats.bestStreak >= 3 },
-  { id: 'level10', xp: 0, coins: 400, check: (p) => levelInfo(p.xp).level >= 10 },
+  { id: 'firstGame', icon: '♙', xp: 20, coins: 20, progress: (p) => n(p.stats.games, 1) },
+  { id: 'firstWin', icon: '♔', xp: 40, coins: 40, progress: (p) => n(p.stats.wins, 1) },
+  { id: 'firstCheckmate', icon: '♚', xp: 50, coins: 50, progress: (p) => n(p.stats.checkmates, 1) },
+  { id: 'winMedium', icon: '◆', xp: 60, coins: 60, progress: (p) => n(p.stats.winsByDifficulty.medium, 1) },
+  { id: 'winHard', icon: '◆◆', xp: 100, coins: 100, progress: (p) => n(p.stats.winsByDifficulty.hard, 1) },
+  { id: 'winMaster', icon: '◆◆◆', xp: 200, coins: 200, progress: (p) => n(p.stats.winsByDifficulty.master, 1) },
+  { id: 'firstPower', icon: '⚡', xp: 15, coins: 15, progress: (p) => n(Object.values(p.stats.powersUsed).filter((x) => (x ?? 0) > 0).length, 1) },
+  ...ALL_POWERS.map((pw) => ({ id: `power_${pw}`, icon: '✦', xp: 15, coins: 10, progress: (p: Profile) => n(p.stats.powersUsed[pw] ?? 0, 1) })),
+  { id: 'powerAdept', icon: '✶', xp: 80, coins: 80, progress: (p) => n(ALL_POWERS.filter((k) => (p.stats.powersUsed[k] ?? 0) > 0).length, ALL_POWERS.length) },
+  { id: 'purist', icon: '♘', xp: 60, coins: 60, progress: once((m) => m.outcome === 'win' && m.playerPowers.length === 0) },
+  { id: 'winAsBlack', icon: '♛', xp: 50, coins: 40, progress: once((m) => m.outcome === 'win' && m.playerColor === 'b') },
+  { id: 'arcaneMate', icon: '☄', xp: 120, coins: 100, progress: once((m) => m.outcome === 'win' && m.arcaneMate) },
+  { id: 'grandArcanist', icon: '✺', xp: 150, coins: 120, progress: once((m) => m.outcome === 'win' && ALL_POWERS.every((k) => m.playerPowers.includes(k))) },
+  { id: 'firstPromotion', icon: '♕', xp: 30, coins: 25, progress: (p) => n(p.stats.promotions, 1) },
+  { id: 'streak3', icon: '≫', xp: 120, coins: 100, progress: (p) => n(p.stats.bestStreak, 3) },
+  { id: 'strategist', icon: '⚑', xp: 40, coins: 30, progress: (p) => n(Object.values(p.stats.challengesDone).reduce((a, b) => a + b, 0), 1) },
+  { id: 'challengeMaster', icon: '⚜', xp: 150, coins: 150, progress: (p) => n(CHALLENGES.filter((c) => (p.stats.challengesDone[c.id] ?? 0) > 0).length, CHALLENGES.length) },
+  { id: 'tenWins', icon: '♔', xp: 150, coins: 150, progress: (p) => n(p.stats.wins, 10) },
+  { id: 'veteran', icon: '⌛', xp: 100, coins: 100, progress: (p) => n(p.stats.games, 25) },
+  { id: 'level5', icon: '★', xp: 0, coins: 150, progress: (p) => n(levelInfo(p.xp).level, 5) },
+  { id: 'level10', icon: '★★', xp: 0, coins: 400, progress: (p) => n(levelInfo(p.xp).level, 10) },
+  { id: 'collector', icon: '◈', xp: 80, coins: 0, progress: (p) => n(p.owned.length, 8) },
 ];
 
 /* ------------------------- Desafios por partida ------------------------- */
@@ -242,6 +260,7 @@ export function finalizeMatch(profile: Profile, m: MatchSummary): { profile: Pro
     for (const c of CHALLENGES) {
       if (c.check(m)) {
         report.challenges.push(c.id);
+        p.stats.challengesDone[c.id] = (p.stats.challengesDone[c.id] ?? 0) + 1;
         xp += Math.round(c.xp * mult);
         coins += Math.round(c.coins * mult);
       }
@@ -283,7 +302,8 @@ export function checkAchievements(p: Profile, m?: MatchSummary): AchievementDef[
   const out: AchievementDef[] = [];
   for (const a of ACHIEVEMENTS) {
     if (p.achievements[a.id]) continue;
-    if (a.check(p, m)) {
+    const pr = a.progress(p, m);
+    if (pr.current >= pr.target) {
       p.achievements[a.id] = Date.now();
       p.xp += a.xp;
       p.coins += a.coins;

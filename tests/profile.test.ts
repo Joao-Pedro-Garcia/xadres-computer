@@ -110,3 +110,23 @@ describe('persistência', () => {
     expect(validateSaved({ version: 1, state: bad, difficulty: 'easy', playerColor: 'w', undoUsed: 0, startedAt: 0, undoStack: [] })).toBeNull();
   });
 });
+
+describe('progresso de conquistas', () => {
+  it('mostra progresso parcial e conclui uma única vez', async () => {
+    const { ACHIEVEMENTS } = await import('../src/meta/profile');
+    const tenWins = ACHIEVEMENTS.find((a) => a.id === 'tenWins')!;
+    let p = newProfile();
+    for (let i = 0; i < 4; i++) p = finalizeMatch(p, match({ gameId: `w${i}` })).profile;
+    expect(tenWins.progress(p)).toEqual({ current: 4, target: 10 });
+    const strat = finalizeMatch(newProfile(), match({ gameId: 'q', playerMoves: 10 }));
+    expect(strat.report.achievements).toContain('strategist');
+    const again = finalizeMatch(strat.profile, match({ gameId: 'q2', playerMoves: 10 }));
+    expect(again.report.achievements).not.toContain('strategist');
+  });
+
+  it('primeiro uso de cada poder', () => {
+    const r = finalizeMatch(newProfile(), match({ playerPowers: ['surge', 'wall'] }));
+    expect(r.report.achievements).toEqual(expect.arrayContaining(['power_surge', 'power_wall', 'firstPower']));
+    expect(r.report.achievements).not.toContain('power_arcaneStep');
+  });
+});

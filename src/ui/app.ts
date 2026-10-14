@@ -349,16 +349,28 @@ export class App {
         'div',
         { class: 'panel content' },
         h('p', { class: 'muted' }, t('achievements.progress', { done, total: ACHIEVEMENTS.length })),
+        h('div', { class: 'xpbar wide' }, h('span', { style: `width:${(done / ACHIEVEMENTS.length) * 100}%` })),
         h(
           'div',
           { class: 'ach-list' },
           ACHIEVEMENTS.map((a) => {
             const at = this.profile.achievements[a.id];
+            const pr = at ? null : a.progress(this.profile);
             return h(
               'div',
-              { class: `ach ${at ? 'done' : ''}` },
-              h('div', { class: 'ach-icon' }, at ? '★' : '☆'),
-              h('div', {}, h('strong', {}, t(`achievements.${a.id}.name`)), h('p', {}, t(`achievements.${a.id}.desc`)), h('small', {}, t('achievements.reward', { xp: a.xp, coins: a.coins }))),
+              { class: `ach ${at ? 'done' : ''}`, 'aria-label': `${t(`achievements.${a.id}.name`)} — ${at ? t('achievements.unlocked') : t('achievements.locked')}` },
+              h('div', { class: 'ach-icon', 'aria-hidden': 'true' }, a.icon),
+              h(
+                'div',
+                { class: 'ach-body' },
+                h('strong', {}, t(`achievements.${a.id}.name`)),
+                h('p', {}, t(`achievements.${a.id}.desc`)),
+                a.xp || a.coins ? h('small', {}, t('achievements.reward', { xp: a.xp, coins: a.coins })) : '',
+                pr
+                  ? h('div', { class: 'ach-progress' }, h('span', { class: 'xpbar' }, h('span', { style: `width:${(pr.current / pr.target) * 100}%` })), h('small', { class: 'muted' }, t('achievements.progressOf', pr)))
+                  : '',
+              ),
+              h('span', { class: `ach-state ${at ? 'ok' : ''}` }, at ? `✓ ${t('achievements.unlocked')}` : `○ ${t('achievements.locked')}`),
               at ? h('small', { class: 'date' }, new Date(at).toLocaleDateString(getLang())) : '',
             );
           }),
