@@ -20,11 +20,10 @@ export interface Settings {
 }
 
 export function defaultSettings(): Settings {
-  const lang: Lang = typeof navigator !== 'undefined' && !navigator.language?.toLowerCase().startsWith('pt') ? 'en' : 'pt-BR';
   const mobile = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   return {
     version: 1,
-    lang,
+    lang: 'pt-BR',
     difficulty: 'medium',
     playerColor: 'w',
     quality: mobile ? 'medium' : 'high',
