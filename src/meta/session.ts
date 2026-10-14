@@ -67,6 +67,8 @@ export function buildSummary(saved: SavedGame, endedAt = Date.now()): MatchSumma
     playerMoves: s.history.filter((h) => h.color === me).length,
     playerPowers: s.powerLog.filter((p) => p.color === me).map((p) => p.power),
     playerCaptures: s.history.filter((h) => h.color === me && h.captured).length,
+    playerPromotions: s.history.filter((h) => h.color === me && h.promotion).length,
+    arcaneMate: result.reason === 'checkmate' && result.winner === me && !!s.history.at(-1)?.power,
     finalEnergy: s.energy[me],
     undoUsed: saved.undoUsed,
     startedAt: saved.startedAt,

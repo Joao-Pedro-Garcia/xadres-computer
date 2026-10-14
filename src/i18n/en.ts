@@ -102,6 +102,12 @@ export const en: typeof ptBR = {
     veteran: { name: 'Veteran', desc: 'Finish 25 games.' },
     level5: { name: 'Ascension', desc: 'Reach level 5.' },
     collector: { name: 'Collector', desc: 'Own 8 cosmetic items.' },
+    winAsBlack: { name: 'Dark side', desc: 'Win playing Black.' },
+    arcaneMate: { name: 'Arcane checkmate', desc: 'Deliver checkmate with a movement power.' },
+    grandArcanist: { name: 'Grand arcanist', desc: 'Win using all six powers in the same game.' },
+    firstPromotion: { name: 'Coronation', desc: 'Promote a pawn.' },
+    streak3: { name: 'Unbeaten', desc: 'Win 3 games in a row.' },
+    level10: { name: 'Arcane legend', desc: 'Reach level 10.' },
   },
   shop: {
     title: 'Customize',

@@ -13,6 +13,7 @@ import {
   finalizeMatch,
   isProfile,
   levelInfo,
+  migrateProfile,
   newProfile,
   purchase,
   type Profile,
@@ -50,7 +51,7 @@ export class App {
   constructor(private root: HTMLElement) {
     this.settings = sanitizeSettings(readJson<unknown>(this.store, KEYS.settings, null));
     const p = readJson<unknown>(this.store, KEYS.profile, null);
-    this.profile = isProfile(p) ? { ...newProfile(), ...p } : newProfile();
+    this.profile = isProfile(p) ? migrateProfile(p) : newProfile();
     this.history = readJson(this.store, KEYS.history, [] as HistoryEntry[], isHistory);
     const rawSaved = readJson<unknown>(this.store, KEYS.savedGame, null);
     this.saved = rawSaved ? validateSaved(rawSaved) : null;

@@ -10,6 +10,9 @@ export interface Stats {
   winsByDifficulty: Record<Difficulty, number>;
   powersUsed: Partial<Record<PowerId, number>>;
   captures: number;
+  promotions: number;
+  winStreak: number;
+  bestStreak: number;
 }
 
 export interface Profile {
@@ -41,9 +44,23 @@ export function newProfile(): Profile {
       winsByDifficulty: { easy: 0, medium: 0, hard: 0, master: 0 },
       powersUsed: {},
       captures: 0,
+      promotions: 0,
+      winStreak: 0,
+      bestStreak: 0,
     },
     rewardedGames: [],
     levelLog: [{ level: 1, at: Date.now() }],
+  };
+}
+
+/** Completa perfis salvos por versões anteriores com campos novos. */
+export function migrateProfile(v: Profile): Profile {
+  const base = newProfile();
+  return {
+    ...base,
+    ...v,
+    equipped: { ...base.equipped, ...v.equipped },
+    stats: { ...base.stats, ...v.stats, winsByDifficulty: { ...base.stats.winsByDifficulty, ...v.stats?.winsByDifficulty } },
   };
 }
 
@@ -94,6 +111,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'veteran', xp: 100, coins: 100, check: (p) => p.stats.games >= 25 },
   { id: 'level5', xp: 0, coins: 150, check: (p) => levelInfo(p.xp).level >= 5 },
   { id: 'collector', xp: 80, coins: 0, check: (p) => p.owned.length >= 8 },
+  { id: 'winAsBlack', xp: 50, coins: 40, check: (_p, m) => !!m && m.outcome === 'win' && m.playerColor === 'b' },
+  { id: 'arcaneMate', xp: 120, coins: 100, check: (_p, m) => !!m && m.outcome === 'win' && m.arcaneMate },
+  { id: 'grandArcanist', xp: 150, coins: 120, check: (_p, m) => !!m && m.outcome === 'win' && ALL_POWERS.every((k) => m.playerPowers.includes(k)) },
+  { id: 'firstPromotion', xp: 30, coins: 25, check: (p) => p.stats.promotions >= 1 },
+  { id: 'streak3', xp: 120, coins: 100, check: (p) => p.stats.bestStreak >= 3 },
+  { id: 'level10', xp: 0, coins: 400, check: (p) => levelInfo(p.xp).level >= 10 },
 ];
 
 /* ------------------------- Desafios por partida ------------------------- */
@@ -124,6 +147,9 @@ export interface MatchSummary {
   playerMoves: number;
   playerPowers: PowerId[];
   playerCaptures: number;
+  playerPromotions: number;
+  /** Xeque-mate dado por um poder de movimento do jogador. */
+  arcaneMate: boolean;
   finalEnergy: number;
   undoUsed: number;
   startedAt: number;
@@ -179,10 +205,16 @@ export function finalizeMatch(profile: Profile, m: MatchSummary): { profile: Pro
   p.stats.games++;
   if (m.outcome === 'win') {
     p.stats.wins++;
+    p.stats.winStreak++;
+    p.stats.bestStreak = Math.max(p.stats.bestStreak, p.stats.winStreak);
     p.stats.winsByDifficulty[m.difficulty]++;
     if (m.result.reason === 'checkmate') p.stats.checkmates++;
-  } else if (m.outcome === 'loss') p.stats.losses++;
-  else p.stats.draws++;
+  } else {
+    p.stats.winStreak = 0;
+    if (m.outcome === 'loss') p.stats.losses++;
+    else p.stats.draws++;
+  }
+  p.stats.promotions += m.playerPromotions;
   for (const pw of m.playerPowers) p.stats.powersUsed[pw] = (p.stats.powersUsed[pw] ?? 0) + 1;
   p.stats.captures += m.playerCaptures;
 

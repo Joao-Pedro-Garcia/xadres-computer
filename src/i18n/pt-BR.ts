@@ -100,6 +100,12 @@ export const ptBR = {
     veteran: { name: 'Veterano', desc: 'Conclua 25 partidas.' },
     level5: { name: 'Ascensão', desc: 'Alcance o nível 5.' },
     collector: { name: 'Colecionador', desc: 'Possua 8 itens cosméticos.' },
+    winAsBlack: { name: 'Lado sombrio', desc: 'Vença jogando com as pretas.' },
+    arcaneMate: { name: 'Xeque-mate arcano', desc: 'Dê xeque-mate com um poder de movimento.' },
+    grandArcanist: { name: 'Grão-arcanista', desc: 'Vença usando os seis poderes na mesma partida.' },
+    firstPromotion: { name: 'Coroação', desc: 'Promova um peão.' },
+    streak3: { name: 'Invicto', desc: 'Vença 3 partidas seguidas.' },
+    level10: { name: 'Lenda arcana', desc: 'Alcance o nível 10.' },
   },
   shop: {
     title: 'Personalização',

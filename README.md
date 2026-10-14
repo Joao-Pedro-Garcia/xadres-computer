@@ -123,7 +123,13 @@ A dificuldade vem apenas da capacidade de análise — nunca de energia extra. A
 - Loja apenas com **cosméticos** (temas, peças, rastros, efeitos de captura); valida saldo, nível, conquista e compra duplicada.
 - Os dados são locais: podem ser perdidos ao limpar os dados do navegador e **não** são protegidos contra adulteração.
 
+Conquistas (19): primeira partida, primeira vitória, primeiro xeque-mate, vitórias contra Médio/Difícil/Mestre, primeiro poder, usar os seis poderes, vencer sem poderes, vencer de pretas, **xeque-mate arcano** (mate dado por um poder), **grão-arcanista** (seis poderes numa só vitória), primeira promoção, 3 vitórias seguidas, 10 vitórias, 25 partidas, níveis 5 e 10, colecionador.
+
 Temas: Clássico Real, Arcano Azul, Reino Dourado, Obsidiana, Gelo Místico, Chamas Arcanas, Cosmos, Mármore Antigo.
+
+## Instalar no celular (modo app / offline)
+
+O build de produção inclui manifesto e *service worker*: no Chrome do celular, abra o jogo e use **⋮ → Instalar app / Adicionar à tela inicial**. Depois do primeiro acesso, o jogo funciona sem internet (a IA e o salvamento já são locais).
 
 ## Controles
 
