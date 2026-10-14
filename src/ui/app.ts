@@ -23,6 +23,7 @@ import { settingsScreen } from './screens/settings';
 import { KEYS, defaultStore, readJson, writeJson, type KeyValueStore } from '../meta/storage';
 import { AiClient } from '../ai/client';
 import type { BoardView } from '../render/scene';
+import { paintPanorama } from '../render/backdrop';
 import { START_FEN } from '../core/game';
 import { Audio } from './audio';
 import { Music } from './music';
@@ -375,9 +376,21 @@ export class App {
     const id = item.id.split(':')[1];
     if (item.category === 'theme') {
       const th = THEMES.find((x) => x.id === id)!;
+      // Mesmo panorama pintado do jogo (recorte do castelo) + tabuleiro em perspectiva.
+      const pano = document.createElement('canvas');
+      pano.width = 640;
+      pano.height = 160;
+      paintPanorama(pano, th.scenery, 0.5);
+      pano.className = 'pano';
       const cells = [];
       for (let i = 0; i < 16; i++) cells.push(h('span', { style: `background:${hex((i + Math.floor(i / 4)) % 2 ? th.dark : th.light)}` }));
-      return h('div', { class: 'swatch board', style: `--glow:${hex(th.rim)};background:${hex(th.frame)}` }, cells);
+      return h(
+        'div',
+        { class: 'swatch scenic', style: `--glow:${hex(th.rim)}` },
+        pano,
+        h('div', { class: 'mini-court', style: `background:${hex(th.scenery.ground)}` }),
+        h('div', { class: 'mini-board3d', style: `border-color:${hex(th.frame)};background:${hex(th.frame)}` }, cells),
+      );
     }
     if (item.category === 'pieces') {
       const sk = PIECE_SKINS.find((x) => x.id === id)!;

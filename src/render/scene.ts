@@ -7,7 +7,10 @@ import { FILES, fileOf, rankOf, toSquare } from '../core/squares';
 import type { CaptureFxDef, PieceSkinDef, ThemeDef } from '../meta/catalog';
 import { createPiece, createPieceMaterials, disposePiece, type PieceMaterials, type PieceObject } from './pieces';
 import { Fx, getDotTexture } from './fx';
+import { paintPanorama } from './backdrop';
+import { Environment } from './environment';
 import { ease, Tweens } from './tween';
+import { constellation, disposeTree, enchantedTree, ghostTrail, mysticEye, roots, royalCrown, starVortex, stonePillars, type SpellCtx } from './spells';
 
 export interface Highlights {
   selected?: Square | null;
@@ -80,6 +83,10 @@ export class BoardView {
   private accentA = new THREE.PointLight(0x4f8dff, 6, 9, 2);
   private accentB = new THREE.PointLight(0xffc24a, 4, 9, 2);
   private motes: THREE.Points | null = null;
+  private weather: ThemeDef['scenery']['weather'] = 'motes';
+  private env = new Environment();
+  private panorama: THREE.CanvasTexture | null = null;
+  private static panoramaCache = new Map<string, THREE.CanvasTexture>();
   private stars: THREE.Points | null = null;
   private runeCircle: THREE.Mesh | null = null;
   private mode: 'menu' | 'game' = 'menu';
@@ -159,7 +166,7 @@ export class BoardView {
 
     this.buildLights();
     this.buildBoard();
-    this.scene.add(this.boardGroup, this.hlGroup, this.effectGroup, this.coordGroup);
+    this.scene.add(this.boardGroup, this.hlGroup, this.effectGroup, this.coordGroup, this.env.group);
     this.bindPointer();
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
@@ -293,13 +300,17 @@ export class BoardView {
       (this.motes.material as THREE.Material).dispose();
       this.motes = null;
     }
-    const n = this.opts.particles === 'off' ? 0 : this.opts.particles === 'reduced' ? 90 : 260;
+    const base = this.weather === 'snow' ? 420 : 260;
+    const n = this.opts.particles === 'off' ? 0 : this.opts.particles === 'reduced' ? Math.round(base * 0.35) : base;
     if (!n) return;
     const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) pos.set([(Math.random() - 0.5) * 16, Math.random() * 6 - 0.5, (Math.random() - 0.5) * 16], i * 3);
+    for (let i = 0; i < n; i++) pos.set([(Math.random() - 0.5) * 22, Math.random() * 7 - 0.8, (Math.random() - 0.5) * 22], i * 3);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({ color: this.theme?.particle ?? 0xffd27a, size: 0.07, map: getDotTexture(), transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending });
+    const w = this.weather;
+    const color = w === 'snow' ? 0xffffff : w === 'embers' ? 0xff8a3a : w === 'fireflies' ? 0xd8ff7a : this.theme?.particle ?? 0xffd27a;
+    const size = w === 'snow' ? 0.1 : w === 'fireflies' ? 0.12 : 0.07;
+    const mat = new THREE.PointsMaterial({ color, size, map: getDotTexture(), transparent: true, opacity: w === 'snow' ? 0.85 : 0.75, depthWrite: false, blending: w === 'snow' ? THREE.NormalBlending : THREE.AdditiveBlending });
     this.motes = new THREE.Points(geo, mat);
     this.motes.frustumCulled = false;
     this.scene.add(this.motes);
@@ -369,8 +380,15 @@ export class BoardView {
     this.frameMat.color.setHex(theme.frame);
     this.frameMat.roughness = 0.4;
     this.frameMat.metalness = 0.3;
-    this.scene.background = new THREE.Color(theme.background);
-    this.scene.fog = new THREE.Fog(theme.fog, 18, 60);
+    const sc = theme.scenery;
+    this.panorama = this.getPanorama(theme);
+    this.scene.background = this.panorama;
+    this.scene.fog = new THREE.Fog(sc.mist, 24, 70);
+    this.env.build(sc, this.opts.quality);
+    if (this.weather !== sc.weather) {
+      this.weather = sc.weather;
+      this.buildMotes();
+    }
     this.ambient.color.setHex(theme.ambient);
     this.keyLight.color.setHex(theme.key);
     this.rimLight.color.setHex(theme.rim);
@@ -378,7 +396,43 @@ export class BoardView {
     this.accentB.color.setHex(theme.particle);
     if (this.runeCircle) (this.runeCircle.material as THREE.MeshBasicMaterial).color.setHex(theme.rim);
     if (this.motes) (this.motes.material as THREE.PointsMaterial).color.setHex(theme.particle);
-    this.buildStars(theme.id === 'cosmos' ? 1500 : this.opts.quality === 'low' ? 0 : 400);
+    // O céu estrelado agora faz parte do panorama pintado.
+    this.buildStars(0);
+  }
+
+  /** Panorama pintado do tema (em cache por tema e resolução). */
+  private getPanorama(theme: ThemeDef): THREE.CanvasTexture {
+    const H = this.opts.quality === 'low' ? 512 : this.opts.quality === 'medium' ? 768 : 1024;
+    const key = `${theme.id}:${H}`;
+    let tex = BoardView.panoramaCache.get(key);
+    if (!tex) {
+      const c = document.createElement('canvas');
+      c.width = H * 4;
+      c.height = H;
+      paintPanorama(c, theme.scenery, 0.5);
+      tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      BoardView.panoramaCache.set(key, tex);
+    }
+    return tex;
+  }
+
+  /** O panorama acompanha a rotação da câmera (como um céu distante) e mantém a proporção. */
+  private updatePanorama() {
+    const tex = this.panorama;
+    if (!tex) return;
+    const rx = Math.min(1, this.camera.aspect / 4);
+    const azimuth = Math.atan2(this.camera.position.x - this.controls.target.x, this.camera.position.z - this.controls.target.z);
+    // Com a câmera inclinada para baixo (jogo), o panorama desce para o castelo
+    // continuar visível acima do tabuleiro; com a câmera baixa (menu), fica no lugar.
+    const d = this.camera.position.clone().sub(this.controls.target);
+    const polar = Math.acos(THREE.MathUtils.clamp(d.y / d.length(), -1, 1));
+    const dy = this.mode === 'menu' ? 0 : THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(polar, 0.55, 1.15, -0.24, 0), -0.24, 0);
+    tex.repeat.set(rx, 1);
+    tex.offset.set(0.5 - azimuth / (Math.PI * 2) - rx / 2, dy);
   }
 
   setSkin(skin: PieceSkinDef, fen?: string) {
@@ -477,7 +531,7 @@ export class BoardView {
     const d = this.fitDistance();
     this.controls.maxDistance = Math.max(19, d * 1.35);
     // Em telas estreitas, a câmera fica mais alta para aproveitar a altura.
-    const elev = this.camera.aspect < 0.8 ? 0.95 : 0.85;
+    const elev = this.camera.aspect < 0.8 ? 0.95 : 0.8;
     const dir = new THREE.Vector3(0, Math.sin(elev), Math.cos(elev) * (this.orientation === 'w' ? 1 : -1));
     const target = new THREE.Vector3(0, 0, 0);
     const pos = dir.multiplyScalar(d);
@@ -699,7 +753,7 @@ export class BoardView {
         const c = z.squares.reduce((acc, s) => acc.add(squareToPos(s)), new THREE.Vector3()).divideScalar(z.squares.length);
         const dome = new THREE.Mesh(
           new THREE.SphereGeometry(2.2, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.035, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.FrontSide }),
         );
         dome.position.copy(c);
         this.effectGroup.add(dome);
@@ -819,6 +873,15 @@ export class BoardView {
   }
 
   /** Coreografias de captura, uma para cada tipo de peça atacante. */
+  private get spell(): SpellCtx {
+    return { scene: this.scene, fx: this.fx, tweens: this.tweens };
+  }
+
+  /** Feitiços temáticos ficam desligados com "reduzir movimento". */
+  private get magic(): boolean {
+    return !this.opts.reduceMotion;
+  }
+
   private async captureSequence(type: PieceSymbol, obj: PieceObject, victim: PieceObject | null, from: THREE.Vector3, to: THREE.Vector3, victimPos: THREE.Vector3) {
     const fxc = PIECE_FX[type];
     const k = this.captureFx.intensity;
@@ -840,7 +903,10 @@ export class BoardView {
 
     switch (type) {
       case 'k': {
+        // Realeza: uma coroa de lâminas douradas desce sobre a vítima.
+        const crown = this.magic ? royalCrown(this.spell, victimPos, c1) : null;
         await this.arc(obj, start, approach, 0.3, 380);
+        await crown;
         this.fx.burst(impact, { count: 70 * k, color: c1, speed: 3, life: 1, size: 0.14 });
         this.fx.burst(impact, { count: 40 * k, color: c2, speed: 2, life: 0.9, size: 0.1 });
         this.fx.shockwave(victimPos, c1, 2.2 * k);
@@ -849,6 +915,8 @@ export class BoardView {
         break;
       }
       case 'q': {
+        // Cosmos: um vórtice de estrelas se abre sob a vítima.
+        if (this.magic) void starVortex(this.spell, victimPos, c1, 1100, 0.9);
         this.fx.trail(obj, c1, 0.4);
         await this.arc(obj, start, approach, 0.6, 300, ease.in);
         this.fx.beam(victimPos, c1, 0.5, 2.5);
@@ -859,6 +927,11 @@ export class BoardView {
       }
       case 'r': {
         await this.arc(obj, start, approach.clone().setY(0), 1.4, 480, ease.inOut);
+        // Terra: pilares de pedra rúnica irrompem ao redor da vítima.
+        if (this.magic) {
+          const ring = [0, 1, 2, 3, 4, 5].map((i) => victimPos.clone().add(new THREE.Vector3(Math.cos((i / 6) * Math.PI * 2) * 0.55, 0, Math.sin((i / 6) * Math.PI * 2) * 0.55)));
+          void stonePillars(this.spell, ring, c1, 250);
+        }
         this.fx.shockwave(victimPos, c1, 3 * k, 0.7);
         this.fx.shockwave(victimPos, c2, 1.8 * k, 0.5);
         this.fx.burst(victimPos.clone().setY(0.1), { count: 60 * k, color: c1, speed: 2.6, life: 0.8, size: 0.12, spread: 'ring', gravity: -1 });
@@ -867,6 +940,8 @@ export class BoardView {
         break;
       }
       case 'b': {
+        // Luz: o olho místico abre sobre a vítima e a fixa com um feixe.
+        if (this.magic) void mysticEye(this.spell, victimPos, [victimPos], 250);
         this.fx.runes(victimPos, c1, 0.9, 0.6);
         this.fx.beam(victimPos, c1, 0.7);
         await this.tweens.wait(300);
@@ -876,6 +951,8 @@ export class BoardView {
         break;
       }
       case 'n': {
+        // Espectro: o cavalo avança deixando cópias fantasmas.
+        if (this.magic) ghostTrail(this.spell, obj, c1, 340, 55);
         this.fx.trail(obj, c1, 0.35);
         await this.arc(obj, start, approach, 1.1, 340, ease.inOut);
         this.fx.burst(impact, { count: 55 * k, color: c1, speed: 3.2, life: 0.7, size: 0.1 });
@@ -884,7 +961,13 @@ export class BoardView {
         break;
       }
       case 'p': {
-        await this.arc(obj, start, approach, 0.35, 260);
+        // Natureza: raízes brotam do chão e prendem a vítima.
+        if (this.magic) {
+          const r = roots(this.spell, victimPos, 0x7dff9a, 1.0, 420);
+          await this.arc(obj, start, approach, 0.35, 260);
+          const grip = await r;
+          void this.tweens.wait(500).then(() => disposeTree(grip));
+        } else await this.arc(obj, start, approach, 0.35, 260);
         this.fx.burst(impact, { count: 30 * k, color: c1, speed: 2, life: 0.6, size: 0.1 });
         this.fx.shockwave(victimPos, c1, 1 * k, 0.4);
         this.fx.flash(victimPos, c1, 3.5 * k);
@@ -894,6 +977,8 @@ export class BoardView {
 
     // Saída épica da peça capturada.
     if (victim) await this.epicExit(victim, dir, c1);
+    // O peão faz brotar uma árvore encantada onde a vítima caiu (curta e sem bloquear o jogo).
+    if (type === 'p' && this.magic) void enchantedTree(this.spell, victimPos, 0x5cff8a, 0xffa8e0, 250);
     await this.arc(obj, obj.position.clone(), to, 0.15, 220);
     obj.userData.material.emissiveIntensity = 0;
     await this.unfocus();
@@ -963,6 +1048,12 @@ export class BoardView {
     const mat = obj.userData.material;
     const power: MovementPowerId = ev.power;
     if (power === 'arcaneStep') {
+      // Portal de estrelas na origem e no destino, ligados por uma constelação.
+      if (this.magic) {
+        void starVortex(this.spell, from, 0x9a7bff, 900);
+        void starVortex(this.spell, to, 0x5fc8ff, 1100);
+        void constellation(this.spell, from, to);
+      }
       this.fx.runes(from, 0x9a7bff, 0.8, 0.55);
       this.fx.beam(from, 0x9a7bff, 0.6, 3);
       mat.emissive.setHex(0x9a7bff);
@@ -982,6 +1073,8 @@ export class BoardView {
       mat.transparent = true;
       mat.emissive.setHex(0x5fc8ff);
       this.fx.trail(obj, 0x5fc8ff, 0.6);
+      // Cavalo fantasma: cópias espectrais ao longo do salto.
+      if (this.magic) ghostTrail(this.spell, obj, 0x7ae0ff, 700, 60);
       await this.tweens.run(150, (t) => {
         mat.opacity = 1 - 0.55 * t;
         mat.emissiveIntensity = 0.8 * t;
@@ -993,8 +1086,11 @@ export class BoardView {
         mat.emissiveIntensity = 0.8 * (1 - t);
       });
     } else {
+      // Impulso: raízes empurram o peão para frente e uma árvore brota onde ele estava.
+      if (this.magic) await roots(this.spell, from, 0xb6ff6a, 0.8, 300).then((g) => void this.tweens.wait(400).then(() => disposeTree(g)));
       this.fx.trail(obj, 0xffd27a, 0.4);
       await this.arc(obj, from, to, 0.15, 300, ease.out);
+      if (this.magic) void enchantedTree(this.spell, from, 0x8aff5c, 0xffe08a, 200);
       this.fx.burst(to.clone().setY(0.1), { count: 24, color: 0xffd27a, speed: 1.6, life: 0.6, size: 0.1, spread: 'ring', gravity: 0 });
     }
     this.pieces.delete(ev.from);
@@ -1005,16 +1101,24 @@ export class BoardView {
     const at = squareToPos(ev.from);
     const power: UtilityPowerId = ev.power;
     if (power === 'royalShield') {
+      if (this.magic) await royalCrown(this.spell, at, 0xffd27a);
       this.fx.runes(at, 0xffd27a, 1, 1.4);
       this.fx.burst(at.clone().setY(0.6), { count: 50, color: 0xffd27a, speed: 2, life: 0.9, size: 0.11, spread: 'ring', gravity: 0.3 });
       this.fx.flash(at, 0xffd27a, 7);
     } else if (power === 'wall') {
+      if (this.magic) void stonePillars(this.spell, ev.squares.map((q) => squareToPos(q)), 0x5fa0ff, 450);
       for (const s of ev.squares) this.fx.burst(squareToPos(s, 0.05), { count: 8, color: 0x5fa0ff, speed: 1.2, life: 0.8, size: 0.09, spread: 'up', gravity: 0 });
       this.fx.shockwave(at, 0x5fa0ff, 1.6, 0.6);
       if (this.opts.cameraMotion) this.shake = 0.12;
     } else {
       this.fx.runes(at, 0x7ae0ff, 1.1, 1);
       this.fx.beam(at, 0x7ae0ff, 0.8, 4);
+      if (this.magic) {
+        // O olho místico lança feixes sobre as peças inimigas dentro da área revelada.
+        const area = new Set(ev.squares);
+        const enemies = [...this.pieces].filter(([sq, p]) => area.has(sq) && p.userData.color !== ev.color).map(([sq]) => squareToPos(sq));
+        await mysticEye(this.spell, at, enemies, 450);
+      }
     }
     await this.tweens.wait(450);
   }
@@ -1084,14 +1188,34 @@ export class BoardView {
     }
     if (this.motes) {
       const arr = (this.motes.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+      const w = this.weather;
       for (let i = 0; i < arr.length; i += 3) {
-        arr[i + 1] += dt * (0.15 + ((i * 7) % 10) * 0.02);
-        arr[i] += Math.sin(time + i) * dt * 0.05;
-        if (arr[i + 1] > 6) arr[i + 1] = -0.5;
+        const v = 0.15 + ((i * 7) % 10) * 0.02;
+        if (w === 'snow') {
+          // Neve cai balançando.
+          arr[i + 1] -= dt * (0.5 + v);
+          arr[i] += Math.sin(time * 0.8 + i) * dt * 0.25;
+          if (arr[i + 1] < -0.9) arr[i + 1] = 6.5;
+        } else if (w === 'fireflies') {
+          // Vaga-lumes vagam em todas as direções.
+          arr[i] += Math.sin(time * 0.7 + i) * dt * 0.35;
+          arr[i + 1] += Math.cos(time * 0.9 + i * 0.5) * dt * 0.2;
+          arr[i + 2] += Math.cos(time * 0.6 + i * 1.3) * dt * 0.35;
+          if (arr[i + 1] > 4) arr[i + 1] = 0;
+          if (arr[i + 1] < -0.8) arr[i + 1] = 2;
+        } else {
+          // Brasas sobem rápido; partículas mágicas sobem devagar.
+          arr[i + 1] += dt * v * (w === 'embers' ? 3 : 1);
+          arr[i] += Math.sin(time + i) * dt * (w === 'embers' ? 0.25 : 0.05);
+          if (arr[i + 1] > 6.5) arr[i + 1] = -0.8;
+        }
       }
+      if (w === 'fireflies') (this.motes.material as THREE.PointsMaterial).opacity = 0.55 + Math.sin(time * 3) * 0.25;
       this.motes.geometry.getAttribute('position').needsUpdate = true;
     }
     if (this.runeCircle) this.runeCircle.rotation.z = time * 0.03;
+    this.env.update(time);
+    this.updatePanorama();
     this.accentA.position.set(Math.sin(time * 0.4) * 5, 2.5, Math.cos(time * 0.4) * 5);
     this.accentB.position.set(-Math.sin(time * 0.3) * 5, 2.2, -Math.cos(time * 0.3) * 5);
     const pulse = this.opts.reduceMotion ? 1 : 0.65 + Math.sin(time * 4) * 0.35;

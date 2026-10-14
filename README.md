@@ -132,6 +132,23 @@ O build de produção inclui manifesto e *service worker*: no Chrome do celular,
 - **Câmera**: arrastar (1 dedo / botão esquerdo) gira; pinça / roda faz zoom; 2 dedos / botão direito desloca. Limites de zoom, ângulo e deslocamento impedem perder o tabuleiro. Botão "Restaurar câmera".
 - **Esc**: pula a animação ou cancela a seleção.
 
+## Feitiços e cenários
+
+Cada poder e cada captura tem uma pequena cena mágica (1 a 2 s), em `src/render/spells.ts`:
+
+| Peça | Captura | Poder |
+| --- | --- | --- |
+| Peão | raízes prendem a vítima e uma árvore encantada brota e se desfaz em pétalas | Impulso: raízes empurram o peão e uma árvore brota onde ele estava |
+| Cavalo | avança deixando cópias fantasmas | Salto Fantasma: rastro de cavalos espectrais |
+| Bispo | o olho místico abre e fixa a vítima com um feixe | Visão Mística: o olho lança feixes sobre as peças inimigas da área |
+| Torre | pilares de pedra rúnica irrompem ao redor | Muralha: pilares sobem em cada casa da zona |
+| Rainha | vórtice de estrelas sob a vítima | Passo Arcano: portais de estrelas ligados por uma constelação |
+| Rei | coroa de lâminas douradas desce sobre a vítima | Escudo Real: a coroa desce e explode em luz |
+
+Depois do efeito, a peça capturada é arremessada e se estilhaça. Com "Reduzir movimento", os feitiços são desligados e a captura vira uma dissolução suave.
+
+Cada tema da loja tem um cenário próprio: um panorama pintado por código (céu, sol/lua/eclipse/planetas, aurora, montanhas e castelo no estilo do tema — gótico, palácio, fortaleza, gelo, templo ou ilha flutuante) que acompanha a rotação da câmera, um pátio flutuante com braseiros e objetos temáticos (pinheiros, cristais, obeliscos, agulhas de obsidiana, gelo, rochas de lava, asteroides ou colunas) e clima (vaga-lumes, neve, brasas, partículas mágicas).
+
 ## Música
 
 Trilha ambiente calma gerada pelo próprio jogo com WebAudio (`src/ui/music.ts`): acordes suaves em lá menor, baixo grave e notas esparsas com eco — sem arquivos de áudio externos. Começa após o primeiro toque/clique (exigência dos navegadores), pausa quando a aba fica em segundo plano e pode ser desligada pelo botão **♫ Música** no menu e na partida, ou ajustada em Configurações → Áudio (volume da música, multiplicado pelo volume geral).
