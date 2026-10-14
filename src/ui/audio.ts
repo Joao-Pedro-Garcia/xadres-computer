@@ -6,8 +6,21 @@ export class Audio {
   enabled = true;
   volume = 0.6;
 
+  private unlocked = false;
+
+  constructor() {
+    // Navegadores só permitem áudio após um gesto do usuário.
+    const unlock = () => {
+      this.unlocked = true;
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+  }
+
   private ensure(): AudioContext | null {
-    if (!this.enabled) return null;
+    if (!this.enabled || !this.unlocked) return null;
     try {
       this.ctx ??= new AudioContext();
       if (this.ctx.state === 'suspended') void this.ctx.resume();

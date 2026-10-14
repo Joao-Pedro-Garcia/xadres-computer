@@ -14,7 +14,7 @@
     "simulate": "SIM=1 vitest run"
   },
   "dependencies": {
-    "chess.js": "^1.4.0",
+    "chess.js": "1.4.0",
     "three": "^0.186.1"
   },
   "devDependencies": {

@@ -53,7 +53,7 @@ export class BoardView {
   readonly controls: OrbitControls;
   private fx: Fx;
   private tweens = new Tweens();
-  private clock = new THREE.Clock();
+  private clock = new THREE.Timer();
   private pieces = new Map<Square, PieceObject>();
   private boardGroup = new THREE.Group();
   private squareMeshes: THREE.Mesh[] = [];
@@ -93,7 +93,7 @@ export class BoardView {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.classList.add('board-canvas');
 
@@ -371,10 +371,22 @@ export class BoardView {
     this.buildCoordinates();
   }
 
+  /** Distância que garante que o tabuleiro inteiro caiba na tela (importante em celulares em pé). */
+  private fitDistance(): number {
+    const vFov = THREE.MathUtils.degToRad(this.camera.fov);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect);
+    const byWidth = 5.4 / Math.tan(hFov / 2);
+    return Math.max(12.5, byWidth);
+  }
+
   resetCamera(instant = false) {
-    const z = this.orientation === 'w' ? 8.2 : -8.2;
+    const d = this.fitDistance();
+    this.controls.maxDistance = Math.max(19, d * 1.35);
+    // Em telas estreitas, a câmera fica mais alta para aproveitar a altura.
+    const elev = this.camera.aspect < 0.8 ? 0.95 : 0.85;
+    const dir = new THREE.Vector3(0, Math.sin(elev), Math.cos(elev) * (this.orientation === 'w' ? 1 : -1));
     const target = new THREE.Vector3(0, 0, 0);
-    const pos = new THREE.Vector3(0, 9.4, z);
+    const pos = dir.multiplyScalar(d);
     if (instant || !this.opts.cameraMotion) {
       this.camera.position.copy(pos);
       this.controls.target.copy(target);
@@ -559,8 +571,8 @@ export class BoardView {
       if (z.kind === 'shield' && z.squares.length) {
         const c = z.squares.reduce((acc, s) => acc.add(squareToPos(s)), new THREE.Vector3()).divideScalar(z.squares.length);
         const dome = new THREE.Mesh(
-          new THREE.SphereGeometry(1.9, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.08, depthWrite: false, blending: THREE.AdditiveBlending, wireframe: true }),
+          new THREE.SphereGeometry(2.2, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
         );
         dome.position.copy(c);
         this.effectGroup.add(dome);
@@ -845,14 +857,14 @@ export class BoardView {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     // Em telas estreitas (retrato), abre o campo de visão para o tabuleiro caber.
-    this.camera.fov = w / h < 0.8 ? 58 : 42;
+    this.camera.fov = w / h < 0.8 ? 50 : 42;
     this.camera.updateProjectionMatrix();
   }
 
   start() {
     if (this.running) return;
     this.running = true;
-    this.clock.getDelta();
+    this.clock.update();
     const loop = () => {
       if (!this.running) return;
       this.raf = requestAnimationFrame(loop);
@@ -867,8 +879,9 @@ export class BoardView {
   }
 
   private frame() {
+    this.clock.update();
     const dt = Math.min(0.05, this.clock.getDelta());
-    const time = this.clock.elapsedTime;
+    const time = this.clock.getElapsed();
     this.tweens.tick(performance.now());
     this.fx.update(dt);
     if (this.mode === 'menu') {
