@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Chess } from 'chess.js';
 import type { Color, GameEvent, MovementPowerId, PieceSymbol, Square, UtilityPowerId } from '../core/types';
@@ -52,6 +57,14 @@ const PIECE_FX: Record<PieceSymbol, { color: number; color2: number }> = {
   p: { color: 0x8ab8ff, color2: 0xffffff },
 };
 
+/** Vinheta suave: escurece levemente as bordas da tela. */
+const VIGNETTE = {
+  uniforms: { tDiffuse: { value: null }, strength: { value: 0.35 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader:
+    'uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv; void main() { vec4 c = texture2D(tDiffuse, vUv); vec2 d = vUv - 0.5; float v = 1.0 - strength * smoothstep(0.25, 0.85, dot(d, d) * 2.2); gl_FragColor = vec4(c.rgb * v, c.a); }',
+};
+
 export function squareToPos(sq: Square, y = 0): THREE.Vector3 {
   return new THREE.Vector3(fileOf(sq) - 3.5, y, 3.5 - rankOf(sq));
 }
@@ -67,9 +80,14 @@ export class BoardView {
   private pieces = new Map<Square, PieceObject>();
   private boardGroup = new THREE.Group();
   private squareMeshes: THREE.Mesh[] = [];
-  private lightMat = new THREE.MeshStandardMaterial();
-  private darkMat = new THREE.MeshStandardMaterial();
-  private frameMat = new THREE.MeshStandardMaterial();
+  private lightMat = new THREE.MeshPhysicalMaterial({ clearcoat: 0.55, clearcoatRoughness: 0.18 });
+  private darkMat = new THREE.MeshPhysicalMaterial({ clearcoat: 0.55, clearcoatRoughness: 0.18 });
+  private frameMat = new THREE.MeshPhysicalMaterial({ clearcoat: 0.4, clearcoatRoughness: 0.25 });
+  private plinthMat = new THREE.MeshStandardMaterial({ color: 0x1a1820, roughness: 0.55, metalness: 0.2 });
+  private contactShadows = new Map<PieceObject, THREE.Mesh>();
+  private static shadowTex: THREE.Texture | null = null;
+  private composer: EffectComposer | null = null;
+  private bloom: UnrealBloomPass | null = null;
   private inlayMat = new THREE.MeshStandardMaterial({ color: 0xd4a84a, metalness: 0.9, roughness: 0.25, emissive: 0x3a2a08 });
   private hlGroup = new THREE.Group();
   private effectGroup = new THREE.Group();
@@ -219,27 +237,37 @@ export class BoardView {
     this.scene.add(this.ambient, this.keyLight, this.rimLight, this.accentA, this.accentB);
   }
 
+  /** Veios de madeira procedurais (tons de cinza; a cor vem do tema). */
   private grainTexture(): THREE.Texture {
+    const N = 512;
     const c = document.createElement('canvas');
-    c.width = c.height = 256;
+    c.width = c.height = N;
     const g = c.getContext('2d')!;
-    g.fillStyle = '#e8e8e8';
-    g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 90; i++) {
-      const y = Math.random() * 256;
-      g.strokeStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '120,120,120'},${0.05 + Math.random() * 0.12})`;
-      g.lineWidth = 1 + Math.random() * 3;
-      g.beginPath();
-      g.moveTo(0, y);
-      for (let x = 0; x <= 256; x += 32) g.lineTo(x, y + Math.sin(x / 40 + i) * 6);
-      g.stroke();
-    }
-    const img = g.getImageData(0, 0, 256, 256);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const n = (Math.random() - 0.5) * 18;
-      img.data[i] += n;
-      img.data[i + 1] += n;
-      img.data[i + 2] += n;
+    const img = g.createImageData(N, N);
+    const rnd = (x: number) => {
+      const t = Math.sin(x * 127.1) * 43758.5453;
+      return t - Math.floor(t);
+    };
+    // Ruído suave 1D para ondular as fibras.
+    const smooth = (x: number) => {
+      const i = Math.floor(x);
+      const f = x - i;
+      const u = f * f * (3 - 2 * f);
+      return rnd(i) * (1 - u) + rnd(i + 1) * u;
+    };
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        // Fibras quase retas, levemente ondulas, com anéis largos e poros finos.
+        const warp = smooth(x / 140) * 7 + smooth(x / 37 + 40) * 1.5;
+        const v = (y + warp) / N;
+        const rings = Math.sin(v * Math.PI * 2 * 5 + smooth(x / 200) * 2);
+        const fibers = smooth((y + warp) * 1.7 + 300) * 0.6 + smooth((y + warp) * 6.3 + 900) * 0.4;
+        const pores = rnd(Math.floor(x / 3) * 7 + Math.floor((y + warp) / 1.5) * 131) > 0.97 ? -14 : 0;
+        const k = 210 + rings * 9 + (fibers - 0.5) * 26 + pores + (rnd(x * 7 + y * 13) - 0.5) * 5;
+        const o = (y * N + x) * 4;
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = Math.max(0, Math.min(255, k));
+        img.data[o + 3] = 255;
+      }
     }
     g.putImageData(img, 0, 0);
     const tex = new THREE.CanvasTexture(c);
@@ -248,17 +276,51 @@ export class BoardView {
     return tex;
   }
 
+  /** Moldura chanfrada (anel quadrado extrudado com bisel). */
+  private static squareRing(outer: number, inner: number, depth: number, bevel: number): THREE.BufferGeometry {
+    const sh = new THREE.Shape();
+    sh.moveTo(-outer, -outer);
+    sh.lineTo(outer, -outer);
+    sh.lineTo(outer, outer);
+    sh.lineTo(-outer, outer);
+    sh.lineTo(-outer, -outer);
+    const hole = new THREE.Path();
+    hole.moveTo(-inner, -inner);
+    hole.lineTo(-inner, inner);
+    hole.lineTo(inner, inner);
+    hole.lineTo(inner, -inner);
+    hole.lineTo(-inner, -inner);
+    sh.holes.push(hole);
+    const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3 });
+    g.rotateX(-Math.PI / 2);
+    return g;
+  }
+
   private buildBoard() {
     const grain = this.grainTexture();
     grain.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    this.lightMat.map = grain;
-    this.darkMat.map = grain;
-    const sqGeo = new THREE.BoxGeometry(1, 0.16, 1);
-    sqGeo.translate(0, -0.08, 0);
+    for (const m of [this.lightMat, this.darkMat]) {
+      m.map = grain;
+      m.roughnessMap = grain;
+    }
+    this.frameMat.map = grain;
+    // Casas com pequenas juntas; cada uma usa um trecho diferente dos veios e
+    // as escuras ficam giradas 90°, como num tabuleiro de marchetaria.
     for (let r = 0; r < 8; r++) {
       for (let f = 0; f < 8; f++) {
         const light = (f + r) % 2 === 1;
-        const m = new THREE.Mesh(sqGeo, light ? this.lightMat : this.darkMat);
+        const geo = new THREE.BoxGeometry(0.975, 0.16, 0.975);
+        geo.translate(0, -0.08, 0);
+        const uv = geo.attributes.uv;
+        const du = ((f * 37 + r * 11) % 8) / 8;
+        const dv = ((f * 13 + r * 29) % 8) / 8;
+        for (let i = 0; i < uv.count; i++) {
+          let u = uv.getX(i) * 0.4;
+          let v = uv.getY(i) * 0.4;
+          if (!light) [u, v] = [v, u];
+          uv.setXY(i, u + du, v + dv);
+        }
+        const m = new THREE.Mesh(geo, light ? this.lightMat : this.darkMat);
         m.position.set(f - 3.5, 0, 3.5 - r);
         m.receiveShadow = true;
         m.userData.square = toSquare(f, r);
@@ -266,17 +328,45 @@ export class BoardView {
         this.boardGroup.add(m);
       }
     }
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(9.3, 0.36, 9.3), this.frameMat);
-    frame.position.y = -0.2;
+    // Fundo escuro visível pelas juntas.
+    const under = new THREE.Mesh(new THREE.BoxGeometry(8.05, 0.1, 8.05), new THREE.MeshStandardMaterial({ color: 0x0c0a08, roughness: 0.9 }));
+    under.position.y = -0.12;
+    this.boardGroup.add(under);
+    // Moldura chanfrada com frisos dourados.
+    const frame = new THREE.Mesh(BoardView.squareRing(4.7, 4.04, 0.34, 0.07), this.frameMat);
+    frame.position.y = -0.32;
     frame.receiveShadow = true;
+    frame.castShadow = true;
     this.boardGroup.add(frame);
-    const inlay = new THREE.Mesh(new THREE.BoxGeometry(8.24, 0.03, 8.24), this.inlayMat);
-    inlay.position.y = -0.03;
-    this.boardGroup.add(inlay);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(6.2, 6.8, 0.6, 64), this.frameMat);
-    base.position.y = -0.7;
-    base.receiveShadow = true;
-    this.boardGroup.add(base);
+    const trimIn = new THREE.Mesh(BoardView.squareRing(4.12, 4.03, 0.03, 0), this.inlayMat);
+    trimIn.position.y = 0.075;
+    const trimOut = new THREE.Mesh(BoardView.squareRing(4.66, 4.58, 0.03, 0), this.inlayMat);
+    trimOut.position.y = 0.075;
+    this.boardGroup.add(trimIn, trimOut);
+    // Pedestal esculpido em degraus, com anel dourado.
+    const plinth = new THREE.Mesh(
+      new THREE.LatheGeometry(
+        [
+          [0, -0.32],
+          [6.25, -0.32],
+          [6.35, -0.38],
+          [6.0, -0.48],
+          [5.7, -0.62],
+          [6.1, -0.78],
+          [6.45, -0.86],
+          [6.5, -0.98],
+          [0, -0.98],
+        ].map(([x, y]) => new THREE.Vector2(x, y)),
+        96,
+      ),
+      this.plinthMat,
+    );
+    plinth.receiveShadow = true;
+    this.boardGroup.add(plinth);
+    const goldRing = new THREE.Mesh(new THREE.TorusGeometry(6.3, 0.035, 10, 160), this.inlayMat);
+    goldRing.rotation.x = Math.PI / 2;
+    goldRing.position.y = -0.35;
+    this.boardGroup.add(goldRing);
 
     // Círculo rúnico sob o tabuleiro.
     const runeMat = new THREE.MeshBasicMaterial({ color: 0x4f8dff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -379,6 +469,7 @@ export class BoardView {
       m.needsUpdate = true;
     }
     this.frameMat.color.setHex(theme.frame);
+    this.plinthMat.color.setHex(theme.frame).multiplyScalar(0.55);
     this.frameMat.roughness = 0.4;
     this.frameMat.metalness = 0.3;
     const sc = theme.scenery;
@@ -459,6 +550,7 @@ export class BoardView {
     this.opts = { ...o, cameraMotion: o.cameraMotion && !o.reduceMotion };
     o = this.opts;
     this.autoScale = 1;
+    this.setupComposer();
     this.applyPixelRatio();
     this.controls.rotateSpeed = 0.7 * o.cameraSensitivity;
     this.controls.zoomSpeed = o.cameraSensitivity;
@@ -483,10 +575,48 @@ export class BoardView {
     this.resize();
   }
 
+  /**
+   * Pós-processamento (qualidade média/alta): brilho nas luzes, gemas e magias,
+   * vinheta suave e antisserrilhado por multiamostragem.
+   */
+  private setupComposer() {
+    this.composer?.dispose();
+    this.composer = null;
+    this.bloom = null;
+    if (this.opts.quality === 'low') return;
+    try {
+      const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+      const composer = new EffectComposer(this.renderer, rt);
+      composer.addPass(new RenderPass(this.scene, this.camera));
+      const w = this.container.clientWidth || window.innerWidth;
+      const h = this.container.clientHeight || window.innerHeight;
+      // Limiar alto: só brilham chamas, gemas, magias e destaques, nunca as peças iluminadas.
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.45, 0.5, 1.6);
+      composer.addPass(this.bloom);
+      composer.addPass(new ShaderPass(VIGNETTE));
+      composer.addPass(new OutputPass());
+      this.composer = composer;
+      this.syncComposerSize();
+    } catch (err) {
+      console.warn('Pós-processamento indisponível; usando renderização simples.', err);
+      this.composer = null;
+    }
+  }
+
+  private syncComposerSize() {
+    if (!this.composer) return;
+    const w = this.container.clientWidth || window.innerWidth;
+    const h = this.container.clientHeight || window.innerHeight;
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(w, h);
+  }
+
   private applyPixelRatio() {
     // Celulares têm telas muito densas: resolução 1 deixava tudo borrado.
     const pr = this.opts.quality === 'low' ? 1.5 : this.opts.quality === 'medium' ? 2 : 2.5;
     this.renderer.setPixelRatio(Math.max(0.75, Math.min(window.devicePixelRatio || 1, pr) * this.autoScale));
+    this.syncComposerSize();
   }
 
   /** Modo automático: mede o FPS e reduz a resolução se o aparelho não acompanhar. */
@@ -501,6 +631,12 @@ export class BoardView {
     if (fps < 40 && this.autoScale > 0.6) {
       this.autoScale -= 0.15;
       this.applyPixelRatio();
+      // Aparelho lento: primeiro desliga o pós-processamento, depois as sombras.
+      if (this.composer) {
+        this.composer.dispose();
+        this.composer = null;
+        this.bloom = null;
+      }
       if (this.autoScale < 0.8 && this.renderer.shadowMap.enabled) {
         this.renderer.shadowMap.enabled = false;
         this.keyLight.castShadow = false;
@@ -638,9 +774,51 @@ export class BoardView {
     if (this.selected && ![...this.pieces.values()].includes(this.selected)) this.selected = null;
   }
 
+  /** Sombra de contato suave sob a peça (aterra a peça mesmo sem sombras em tempo real). */
+  private static contactTexture(): THREE.Texture {
+    if (BoardView.shadowTex) return BoardView.shadowTex;
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(0,0,0,0.85)');
+    grad.addColorStop(0.45, 'rgba(0,0,0,0.45)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    BoardView.shadowTex = new THREE.CanvasTexture(c);
+    return BoardView.shadowTex;
+  }
+
+  private addContactShadow(p: PieceObject) {
+    const m = new THREE.Mesh(BoardView.plane(1.0), new THREE.MeshBasicMaterial({ map: BoardView.contactTexture(), transparent: true, depthWrite: false, opacity: 0.6 }));
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = 1;
+    this.scene.add(m);
+    this.contactShadows.set(p, m);
+  }
+
+  private removeContactShadow(p: PieceObject) {
+    const m = this.contactShadows.get(p);
+    if (!m) return;
+    this.scene.remove(m);
+    (m.material as THREE.Material).dispose();
+    this.contactShadows.delete(p);
+  }
+
+  private updateContactShadows() {
+    for (const [p, m] of this.contactShadows) {
+      const lift = Math.max(0, p.position.y);
+      m.position.set(p.position.x, 0.006, p.position.z);
+      m.scale.setScalar((0.82 + lift * 0.25) * p.scale.x);
+      (m.material as THREE.MeshBasicMaterial).opacity = p.visible ? 0.6 * Math.max(0, 1 - lift / 1.6) * (p.userData.material.opacity ?? 1) : 0;
+    }
+  }
+
   private addPiece(sq: Square, type: PieceSymbol, color: Color): PieceObject {
     const p = createPiece(type, color, this.pieceMats, this.opts.shadows);
     p.position.copy(squareToPos(sq));
+    this.addContactShadow(p);
     this.scene.add(p);
     this.pieces.set(sq, p);
     return p;
@@ -650,6 +828,7 @@ export class BoardView {
     const p = this.pieces.get(sq);
     if (!p) return;
     this.scene.remove(p);
+    this.removeContactShadow(p);
     disposePiece(p);
     this.pieces.delete(sq);
   }
@@ -874,6 +1053,7 @@ export class BoardView {
   private removePieceObject(sq: Square, obj: PieceObject) {
     if (this.pieces.get(sq) === obj) this.pieces.delete(sq);
     this.scene.remove(obj);
+    this.removeContactShadow(obj);
     disposePiece(obj);
   }
 
@@ -1149,6 +1329,7 @@ export class BoardView {
     if (inset) this.camera.setViewOffset(w, h, -inset / 2, 0, w, h);
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
+    this.syncComposerSize();
   }
 
   start() {
@@ -1232,7 +1413,9 @@ export class BoardView {
       const ring = p.userData.ring.material as THREE.MeshBasicMaterial;
       ring.opacity = p === this.selected ? 0.95 : 0.35 + Math.sin(time * 1.5 + p.position.x) * 0.1;
     }
-    this.renderer.render(this.scene, this.camera);
+    this.updateContactShadows();
+    if (this.composer) this.composer.render(dt);
+    else this.renderer.render(this.scene, this.camera);
   }
 
   /** Projeta um ponto do tabuleiro em coordenadas de tela (usado em testes automatizados). */

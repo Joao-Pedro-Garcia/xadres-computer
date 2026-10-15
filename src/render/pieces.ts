@@ -18,7 +18,7 @@ type Style = PieceSkinDef['style'];
 
 const geoCache = new Map<string, Part[]>();
 
-function lathe(points: [number, number][], segments = 40): THREE.LatheGeometry {
+function lathe(points: [number, number][], segments = 64): THREE.LatheGeometry {
   return new THREE.LatheGeometry(
     points.map(([x, y]) => new THREE.Vector2(x, y)),
     segments,

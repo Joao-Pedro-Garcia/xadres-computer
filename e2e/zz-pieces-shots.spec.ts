@@ -3,6 +3,7 @@ import { boot } from './helpers';
 
 // Capturas para revisão visual (sem asserções). Executar com SCREENSHOTS=1.
 test.skip(!process.env.SCREENSHOTS, 'somente com SCREENSHOTS=1');
+test.setTimeout(300_000);
 const out = process.env.SCREENSHOTS_DIR || 'screenshots';
 const pretty = { quality: 'high', particles: 'reduced', animations: 'full', reduceMotion: false, cameraMotion: false };
 

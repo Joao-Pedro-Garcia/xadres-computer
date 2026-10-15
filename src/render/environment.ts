@@ -279,7 +279,7 @@ function flagstones(base: number, glow: number): THREE.CanvasTexture {
   }
   // Anel rúnico gravado.
   const gc = new THREE.Color(glow);
-  g.strokeStyle = `rgba(${Math.round(gc.r * 255)},${Math.round(gc.g * 255)},${Math.round(gc.b * 255)},0.35)`;
+  g.strokeStyle = `rgba(${Math.round(gc.r * 255)},${Math.round(gc.g * 255)},${Math.round(gc.b * 255)},0.16)`;
   g.lineWidth = 3;
   g.beginPath();
   g.arc(cx, cx, N * 0.4, 0, Math.PI * 2);

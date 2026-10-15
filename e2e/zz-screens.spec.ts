@@ -3,6 +3,7 @@ import { boot, clickSquare } from './helpers';
 
 // Capturas de tela para revisão visual (não fazem asserções). Executar com SCREENSHOTS=1.
 test.skip(!process.env.SCREENSHOTS, 'somente com SCREENSHOTS=1');
+test.setTimeout(300_000);
 const out = process.env.SCREENSHOTS_DIR || 'screenshots';
 
 test('capturas', async ({ page }) => {

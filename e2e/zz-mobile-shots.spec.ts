@@ -4,6 +4,7 @@ import { boot, tapSquare } from './helpers';
 
 // Capturas para revisão visual no celular (sem asserções). Executar com SCREENSHOTS=1.
 test.skip(!process.env.SCREENSHOTS, 'somente com SCREENSHOTS=1');
+test.setTimeout(300_000);
 const out = process.env.SCREENSHOTS_DIR || 'screenshots';
 test.use({ hasTouch: true, isMobile: true, viewport: { width: 412, height: 780 } });
 
