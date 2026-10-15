@@ -1,0 +1,18 @@
+{
+  "name": "Arcane Chess",
+  "short_name": "Arcane Chess",
+  "description": "Xadrez 3D com poderes mágicos, energia, IA e progressão.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07080d",
+  "theme_color": "#07080d",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
